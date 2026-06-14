@@ -25,6 +25,7 @@ makedocs(;
             "examples/handles.md",
             "examples/dataframes.md",
             "examples/jump.md",
+            "examples/linalg.md",
         ],
         "Reference" => [
             "reference/api.md",

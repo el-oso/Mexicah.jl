@@ -14,6 +14,7 @@ side by side.
 | [Opaque handles](handles.md) | Persist Julia structs across MEX calls via `UInt64` registry keys |
 | [DataFrames](dataframes.md) | Handle-based DataFrame lifecycle and value-copy struct conversion |
 | [JuMP optimization](jump.md) | Stateless LP/QP solvers and handle-based model lifecycle |
+| [LinearAlgebra](linalg.md) | SVD, eigenproblem, QR, Cholesky, and handle-based LU solvers |
 
 Run any example with:
 
