@@ -1,6 +1,8 @@
 # Mexicah.jl
 
 > **Pronunciation:** *meh-SHEE-kah* — named after the Mexica, the Nahuatl-speaking people of central Mexico.
+>
+> **Mexicah** — *Matrix-Laboratory EXecutable Interop: Compiled, AOT, Host-free.*
 
 **Compile Julia functions into standalone MATLAB MEX extensions.**
 
