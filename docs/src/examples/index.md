@@ -13,6 +13,7 @@ side by side.
 | [ModelingToolkit ODE](mtk_ode.md) | Spring-mass system RHS + Jacobian MEX |
 | [Opaque handles](handles.md) | Persist Julia structs across MEX calls via `UInt64` registry keys |
 | [DataFrames](dataframes.md) | Handle-based DataFrame lifecycle and value-copy struct conversion |
+| [JuMP optimization](jump.md) | Stateless LP/QP solvers and handle-based model lifecycle |
 
 Run any example with:
 

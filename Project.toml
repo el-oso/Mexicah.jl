@@ -1,6 +1,6 @@
 name = "Mexicah"
 uuid = "28b42ba6-5630-446f-bcf8-82236b20fd10"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["el_oso <ursus.est@pm.me>"]
 
 [deps]

@@ -24,6 +24,7 @@ makedocs(;
             "examples/mtk_ode.md",
             "examples/handles.md",
             "examples/dataframes.md",
+            "examples/jump.md",
         ],
         "Reference" => [
             "reference/api.md",
