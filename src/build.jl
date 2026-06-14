@@ -51,6 +51,29 @@ function build_mex(
         func_name,
     )
 
+    return _compile_generated_source(
+        src, func_name, output;
+        trim = trim, bundle = bundle, juliac_bin = juliac_bin,
+    )
+end
+
+"""
+    _compile_generated_source(src, func_name, output; trim, bundle, juliac_bin) -> String
+
+Write generated Julia `src` to `output/<func_name>_mexgen.jl`, format it, and run
+juliac to produce `output/<func_name>.<mex_ext>`. Shared by the CPU `build_mex`
+path and the GPU `MexicahCUDAExt` path so the juliac invocation lives in one place.
+"""
+function _compile_generated_source(
+        src::String,
+        func_name::Symbol,
+        output::String;
+        trim::Bool = true,
+        bundle::Bool = true,
+        juliac_bin::String = "juliac",
+    )::String
+    mkpath(output)
+
     generated_jl = joinpath(output, "$(func_name)_mexgen.jl")
     write(generated_jl, src)
 

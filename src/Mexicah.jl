@@ -9,6 +9,8 @@ include("contracts.jl")
 include("runtime.jl")
 include("handles.jl")
 include("codegen.jl")
+include("cuda_driver.jl")
+include("cuda_codegen.jl")
 include("build.jl")
 include("macros.jl")
 include("linalg.jl")
@@ -18,6 +20,7 @@ export build_mex,
     mex_ext,
     @mexfunction,
     @mexgradient,
+    @mexgpukernel,
     MxArray,
     # Marshaling utilities (useful for extension authors)
     load_arg,

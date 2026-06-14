@@ -73,6 +73,81 @@ function _build_gradient_mex(f, grad_name::Symbol, backend::Symbol, output::Stri
     end
 end
 
+# ── @mexgpukernel ─────────────────────────────────────────────────────────────
+
+"""
+    @mexgpukernel kernel=k [block=256] [output="./mex/"] function name(args...)::R end
+
+Compile a KernelAbstractions `@kernel` `k` into a GPU MEX named `name`. Requires
+CUDA.jl and KernelAbstractions.jl to be loaded (they trigger `MexicahCUDAExt`).
+
+The trailing `function` gives only the MATLAB-visible signature — its body is
+ignored. The kernel itself must take `(output, inputs...)` in the same order, all
+`Vector{Float64}` of equal length, with 1-D `@index(Global)` indexing (MVP).
+
+```julia
+@kernel function vadd!(c, a, b)
+    i = @index(Global)
+    @inbounds c[i] = a[i] + b[i]
+end
+
+@mexgpukernel kernel=vadd! block=256 function
+    vector_add(a::Vector{Float64}, b::Vector{Float64})::Vector{Float64}
+end
+```
+"""
+macro mexgpukernel(args...)
+    isempty(args) && error("@mexgpukernel: a function signature is required")
+    fexpr = args[end]
+    (fexpr isa Expr && fexpr.head === :function) ||
+        error("@mexgpukernel: the last argument must be a `function name(...)::R end` signature")
+
+    kws = Dict{Symbol, Any}()
+    for a in args[1:(end - 1)]
+        (a isa Expr && a.head === :(=)) ||
+            error("@mexgpukernel: expected `key=value` options, got $a")
+        kws[a.args[1]] = a.args[2]
+    end
+    haskey(kws, :kernel) ||
+        error("@mexgpukernel: `kernel=<@kernel function>` is required")
+    kernel = kws[:kernel]
+    block = get(kws, :block, 256)
+    output = get(kws, :output, "./mex/")
+
+    sig = fexpr.args[1]
+    argtypes = _extract_argtypes(sig)
+    rettypes = _extract_rettypes(fexpr)
+    fname = _extract_fname(sig)
+
+    return quote
+        Mexicah._build_gpu_mex(
+            $(esc(kernel)),
+            $(QuoteNode(fname)),
+            $(argtypes),
+            $(rettypes),
+            Int($(esc(block))),
+            $(esc(output)),
+        )
+    end
+end
+
+# Called at runtime; the actual implementation lives in MexicahCUDAExt.
+function _build_gpu_mex(
+        kernelobj,
+        mex_name::Symbol,
+        argtypes::Vector{Type},
+        rettypes::Vector{Type},
+        block_dim::Int,
+        output::String,
+    )
+    ext = Base.get_extension(@__MODULE__, :MexicahCUDAExt)
+    ext === nothing && error(
+        "@mexgpukernel: CUDA.jl and KernelAbstractions.jl must be loaded before building " *
+            "a GPU MEX (they trigger MexicahCUDAExt).",
+    )
+    return ext._ka_cuda_build_mex(kernelobj, mex_name, argtypes, rettypes, block_dim, output)
+end
+
 # ── MEX export registry ───────────────────────────────────────────────────────
 
 const _MEX_EXPORTS = Dict{Symbol, NamedTuple{(:mod, :argtypes, :rettypes), Tuple{Module, Vector{Type}, Vector{Type}}}}()
