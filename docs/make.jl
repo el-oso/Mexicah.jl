@@ -47,7 +47,7 @@ makedocs(;
     doctest = false,
 )
 
-deploydocs(;
+DocumenterVitepress.deploydocs(;
     repo = "github.com/el-oso/Mexicah.jl",
     devbranch = "master",
     push_preview = true,
