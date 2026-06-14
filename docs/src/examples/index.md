@@ -11,6 +11,7 @@ side by side.
 | [Sparse Frobenius norm](sparse.md) | `SparseMatrixCSC` marshaling |
 | [Enzyme gradient](ad_enzyme.md) | Reverse-mode AD via `@mexgradient` |
 | [ModelingToolkit ODE](mtk_ode.md) | Spring-mass system RHS + Jacobian MEX |
+| [Opaque handles](handles.md) | Persist Julia structs across MEX calls via `UInt64` registry keys |
 
 Run any example with:
 
