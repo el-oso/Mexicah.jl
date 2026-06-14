@@ -155,7 +155,7 @@ export default defineConfig({
  }
 ]
 ,
-    sidebarDrawer: false,
+    sidebarDrawer: true,
     editLink: { pattern: "https://github.com/el-oso/Mexicah.jl/edit/master/docs/src/:path" },
     socialLinks: [
       { icon: 'github', link: 'https://github.com/el-oso/Mexicah.jl' }
