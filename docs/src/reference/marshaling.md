@@ -13,6 +13,7 @@
 | `UInt64` | `uint64` scalar | `mx_get_data` raw bits — **by value** | `mxCreateNumericMatrix(mxUINT64_CLASS)` |
 | `SparseMatrixCSC{Float64,Int}` | sparse double | `mxGetIr/Jc/Pr`; nzval zero-copy, indices copied | `mxCreateSparse` + index/value copy |
 | `Vector{ComplexF64}` | complex double (R2018a+) | `mxGetComplexDoubles` — **zero-copy** | `mxCreateDoubleMatrix(mxCOMPLEX)` + copy |
+| `String` | `char` array | `mxGetString` — **copies to Julia heap** | `mxCreateString` — **one allocation** |
 
 ## Zero-copy guarantee
 

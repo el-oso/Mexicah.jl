@@ -233,6 +233,21 @@ end
 
 mx_class_id(::UInt64Marshaler)::Cint = mxUINT64_CLASS
 
+# ── String (mxCHAR) ──────────────────────────────────────────────────────────
+# mx_create_string allocates and fills the char array in one call, so the
+# create+store! pattern does not apply for output. store_result(String) below
+# is overridden to call mx_create_string directly.
+
+struct StringMarshaler end
+
+load(::StringMarshaler, pa::MxArray)::String = mx_get_string(pa)
+
+store!(::StringMarshaler, pa::MxArray, v::Any)::Cvoid = nothing
+
+create(::StringMarshaler, ::Tuple)::MxArray = mx_create_string("")
+
+mx_class_id(::StringMarshaler)::Cint = mxCHAR_CLASS
+
 # ── Dispatch: pick a marshaler for a Julia type ───────────────────────────────
 
 function marshaler_for(@nospecialize(T::Type))
@@ -245,10 +260,11 @@ function marshaler_for(@nospecialize(T::Type))
     T === Bool && return BoolMarshaler()
     T === SparseMatrixCSC{Float64, Int} && return SparseFloat64Marshaler()
     T === Vector{ComplexF64} && return ComplexFloat64Marshaler()
+    T === String && return StringMarshaler()
     error(
         "Mexicah: no marshaler for type $T. Supported: Float64, Vector{Float64}, " *
             "Matrix{Float64}, Int32, Int64, UInt64, Bool, SparseMatrixCSC{Float64,Int}, " *
-            "Vector{ComplexF64}",
+            "Vector{ComplexF64}, String",
     )
 end
 
@@ -264,5 +280,10 @@ function store_result(plhs::Ptr{Ptr{MxArray}}, k::Int, v::T) where {T}
     pa = create(m, dims)
     store!(m, pa, v)
     unsafe_store!(plhs, pa, k)
+    return
+end
+
+function store_result(plhs::Ptr{Ptr{MxArray}}, k::Int, v::String)
+    unsafe_store!(plhs, mx_create_string(v), k)
     return
 end

@@ -26,6 +26,7 @@ end
 @verify BoolMarshaler trim_compat = true
 @verify SparseFloat64Marshaler trim_compat = true
 @verify ComplexFloat64Marshaler trim_compat = true
+@verify StringMarshaler trim_compat = true
 
 # TypeContracts._registry is a mutable Dict that is NOT preserved when a package
 # is loaded from a precompile cache (dict mutations to external modules are not

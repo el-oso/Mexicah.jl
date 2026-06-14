@@ -56,16 +56,31 @@ end
     using Mexicah, Test
 
     module TestFuncs4
-    bad(x::String)::String = x
+    bad(x::Complex{Int32})::Complex{Int32} = x
     end
 
     @test_throws ErrorException Mexicah.generate_mex_source(
         TestFuncs4,
         :bad,
-        Type[String],
-        Type[String],
+        Type[Complex{Int32}],
+        Type[Complex{Int32}],
         :bad,
     )
+end
+
+@testitem "generate_mex_source supports String input and output" begin
+    using Mexicah, Test
+
+    module TestFuncs4b
+    greet(s::String)::String = "Hello, " * s
+    end
+
+    src = Mexicah.generate_mex_source(
+        TestFuncs4b, :greet, Type[String], Type[String], :greet
+    )
+    @test occursin("String", src)
+    @test occursin("load_arg", src)
+    @test occursin("store_result", src)
 end
 
 @testitem "_format_file runs runic without error on valid Julia" begin

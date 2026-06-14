@@ -12,7 +12,7 @@ end
 
 @testitem "marshaler_for errors on unsupported type" begin
     using Mexicah, Test
-    @test_throws ErrorException Mexicah.marshaler_for(String)
+    @test_throws ErrorException Mexicah.marshaler_for(Complex{Int32})
     @test_throws ErrorException Mexicah.marshaler_for(AbstractVector)
 end
 

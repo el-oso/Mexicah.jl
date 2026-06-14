@@ -103,5 +103,6 @@ function _type_literal(T::Type)::String
     T === Bool && return "Bool"
     T === SparseMatrixCSC{Float64, Int} && return "SparseArrays.SparseMatrixCSC{Float64,Int}"
     T === Vector{ComplexF64} && return "Vector{ComplexF64}"
+    T === String && return "String"
     error("Mexicah codegen: unsupported type $T")
 end
