@@ -46,6 +46,16 @@ end
     @test occursin("_mexicah_init_once", content)
 end
 
+@testitem "_infer_vector_input detects Vector{Float64} functions" begin
+    using Mexicah, Test
+
+    takes_vec(x::Vector{Float64})::Float64 = sum(x)
+    takes_scalar(x::Float64)::Float64 = x
+
+    @test Mexicah._infer_vector_input(takes_vec) === Vector{Float64}
+    @test Mexicah._infer_vector_input(takes_scalar) === nothing
+end
+
 @testitem "@mexfunction registers in _MEX_EXPORTS" begin
     using Mexicah, Test
 

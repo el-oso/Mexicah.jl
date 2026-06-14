@@ -15,14 +15,17 @@ end
 end
 
 # Verify all concrete marshalers satisfy the contract at precompile time.
-@verify Float64Marshaler
-@verify VectorFloat64Marshaler
-@verify MatrixFloat64Marshaler
-@verify Int32Marshaler
-@verify Int64Marshaler
-@verify BoolMarshaler
-@verify SparseFloat64Marshaler
-@verify ComplexFloat64Marshaler
+# trim_compat=true additionally scans each implementation method's IR for calls
+# that are incompatible with juliac --trim=safe (e.g. Base.return_types).
+@verify Float64Marshaler trim_compat = true
+@verify VectorFloat64Marshaler trim_compat = true
+@verify MatrixFloat64Marshaler trim_compat = true
+@verify Int32Marshaler trim_compat = true
+@verify Int64Marshaler trim_compat = true
+@verify UInt64Marshaler trim_compat = true
+@verify BoolMarshaler trim_compat = true
+@verify SparseFloat64Marshaler trim_compat = true
+@verify ComplexFloat64Marshaler trim_compat = true
 
 # TypeContracts._registry is a mutable Dict that is NOT preserved when a package
 # is loaded from a precompile cache (dict mutations to external modules are not

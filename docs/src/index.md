@@ -1,5 +1,7 @@
 # Mexicah.jl
 
+> **Pronunciation:** *Me-shee-cah* — named after the Mexica, the Nahuatl-speaking people of central Mexico.
+
 **Compile Julia functions into standalone MATLAB MEX extensions.**
 
 Mexicah.jl takes existing Julia code and compiles it into native MEX files

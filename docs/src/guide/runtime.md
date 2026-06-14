@@ -48,7 +48,7 @@ On Windows (`mexw64`) the runtime DLLs must be on the system `PATH` or in the
 same directory as the MEX file. `mexicah_setup.m` adds the bundle directory to
 `PATH` accordingly. Windows support is a Phase 2 feature.
 
-## Initialisation guard
+## Initialization guard
 
 Each MEX file calls `_mexicah_init_once()` at the top of `mexFunction`. This
 function uses a `Threads.Atomic{Int}` compare-and-swap to ensure that any

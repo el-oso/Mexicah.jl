@@ -1,0 +1,8 @@
+Manifest.toml
+docs/build/
+docs/node_modules/
+*.mex*
+*.so
+*.dylib
+*.dll
+/mex/

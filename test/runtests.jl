@@ -14,6 +14,6 @@ end
 runtests(
     ti -> !((!MATLAB_AVAILABLE) && (:matlab in ti.tags)),
     Mexicah;
-    testitem_timeout=120,
-    nworkers=0,
+    testitem_timeout = 120,
+    nworkers = 0,
 )

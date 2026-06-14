@@ -31,7 +31,7 @@ create(::Float64Marshaler, ::Tuple)::MxArray = mx_create_double_scalar(Cdouble(0
 mx_class_id(::Float64Marshaler)::Cint = mxDOUBLE_CLASS
 
 function to_mx(::Float64Marshaler, v::Float64)::MxArray
-    mx_create_double_scalar(Cdouble(v))
+    return mx_create_double_scalar(Cdouble(v))
 end
 
 # ── Vector{Float64} ───────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ struct VectorFloat64Marshaler end
 function load(::VectorFloat64Marshaler, pa::MxArray)::Vector{Float64}
     ptr = mx_get_pr(pa)
     n = Int(mx_get_number_of_elements(pa))
-    unsafe_wrap(Array, ptr, n; own=false)
+    return unsafe_wrap(Array, ptr, n; own = false)
 end
 
 function store!(::VectorFloat64Marshaler, pa::MxArray, v::Any)::Cvoid
@@ -53,7 +53,7 @@ end
 
 function create(::VectorFloat64Marshaler, dims::Tuple)::MxArray
     n = dims[1]::Int
-    mx_create_double_matrix(Csize_t(n), Csize_t(1), mxREAL)
+    return mx_create_double_matrix(Csize_t(n), Csize_t(1), mxREAL)
 end
 
 mx_class_id(::VectorFloat64Marshaler)::Cint = mxDOUBLE_CLASS
@@ -66,7 +66,7 @@ function load(::MatrixFloat64Marshaler, pa::MxArray)::Matrix{Float64}
     ptr = mx_get_pr(pa)
     m = Int(mx_get_m(pa))
     n = Int(mx_get_n(pa))
-    unsafe_wrap(Array, ptr, (m, n); own=false)
+    return unsafe_wrap(Array, ptr, (m, n); own = false)
 end
 
 function store!(::MatrixFloat64Marshaler, pa::MxArray, v::Any)::Cvoid
@@ -79,7 +79,7 @@ end
 function create(::MatrixFloat64Marshaler, dims::Tuple)::MxArray
     m = dims[1]::Int
     n = dims[2]::Int
-    mx_create_double_matrix(Csize_t(m), Csize_t(n), mxREAL)
+    return mx_create_double_matrix(Csize_t(m), Csize_t(n), mxREAL)
 end
 
 mx_class_id(::MatrixFloat64Marshaler)::Cint = mxDOUBLE_CLASS
@@ -97,7 +97,7 @@ function store!(::Int32Marshaler, pa::MxArray, v::Any)::Cvoid
 end
 
 function create(::Int32Marshaler, ::Tuple)::MxArray
-    mx_create_numeric_matrix(Csize_t(1), Csize_t(1), mxINT32_CLASS, mxREAL)
+    return mx_create_numeric_matrix(Csize_t(1), Csize_t(1), mxINT32_CLASS, mxREAL)
 end
 
 mx_class_id(::Int32Marshaler)::Cint = mxINT32_CLASS
@@ -115,7 +115,7 @@ function store!(::Int64Marshaler, pa::MxArray, v::Any)::Cvoid
 end
 
 function create(::Int64Marshaler, ::Tuple)::MxArray
-    mx_create_numeric_matrix(Csize_t(1), Csize_t(1), mxINT64_CLASS, mxREAL)
+    return mx_create_numeric_matrix(Csize_t(1), Csize_t(1), mxINT64_CLASS, mxREAL)
 end
 
 mx_class_id(::Int64Marshaler)::Cint = mxINT64_CLASS
@@ -126,7 +126,7 @@ struct BoolMarshaler end
 
 function load(::BoolMarshaler, pa::MxArray)::Bool
     ptr = mx_get_logicals(pa)
-    unsafe_load(ptr) != 0x00
+    return unsafe_load(ptr) != 0x00
 end
 
 function store!(::BoolMarshaler, pa::MxArray, v::Any)::Cvoid
@@ -151,12 +151,12 @@ function load(::SparseFloat64Marshaler, pa::MxArray)::SparseMatrixCSC{Float64, I
     jc_ptr = mx_get_jc(pa)
     pr_ptr = mx_get_pr(pa)
     # Zero-copy wrap; convert 0-based → 1-based indices
-    ir_raw = unsafe_wrap(Array, ir_ptr, nzmax; own=false)
-    jc_raw = unsafe_wrap(Array, jc_ptr, n + 1; own=false)
-    pr = unsafe_wrap(Array, pr_ptr, nzmax; own=false)
+    ir_raw = unsafe_wrap(Array, ir_ptr, nzmax; own = false)
+    jc_raw = unsafe_wrap(Array, jc_ptr, n + 1; own = false)
+    pr = unsafe_wrap(Array, pr_ptr, nzmax; own = false)
     rowval = Int.(ir_raw) .+ 1
     colptr = Int.(jc_raw) .+ 1
-    SparseMatrixCSC{Float64, Int}(m, n, colptr, rowval, copy(pr))
+    return SparseMatrixCSC{Float64, Int}(m, n, colptr, rowval, copy(pr))
 end
 
 function store!(::SparseFloat64Marshaler, pa::MxArray, v::Any)::Cvoid
@@ -180,7 +180,7 @@ end
 function create(::SparseFloat64Marshaler, dims::Tuple)::MxArray
     m = dims[1]::Int
     n = dims[2]::Int
-    mx_create_sparse(Csize_t(m), Csize_t(n), Csize_t(0), mxREAL)
+    return mx_create_sparse(Csize_t(m), Csize_t(n), Csize_t(0), mxREAL)
 end
 
 mx_class_id(::SparseFloat64Marshaler)::Cint = mxDOUBLE_CLASS
@@ -192,8 +192,8 @@ struct ComplexFloat64Marshaler end
 function load(::ComplexFloat64Marshaler, pa::MxArray)::Vector{ComplexF64}
     ptr = mx_get_complex_doubles(pa)
     n = Int(mx_get_number_of_elements(pa))
-    raw = unsafe_wrap(Array, ptr, 2n; own=false)
-    reinterpret(ComplexF64, raw)
+    raw = unsafe_wrap(Array, ptr, 2n; own = false)
+    return reinterpret(ComplexF64, raw)
 end
 
 function store!(::ComplexFloat64Marshaler, pa::MxArray, v::Any)::Cvoid
@@ -206,10 +206,32 @@ end
 
 function create(::ComplexFloat64Marshaler, dims::Tuple)::MxArray
     n = dims[1]::Int
-    mx_create_double_matrix(Csize_t(n), Csize_t(1), mxCOMPLEX)
+    return mx_create_double_matrix(Csize_t(n), Csize_t(1), mxCOMPLEX)
 end
 
 mx_class_id(::ComplexFloat64Marshaler)::Cint = mxDOUBLE_CLASS
+
+# ── UInt64 scalar (opaque handle IDs) ────────────────────────────────────────
+# MATLAB uint64 preserves the full 64-bit range; mxGetScalar would truncate
+# IDs above 2^53 via double conversion, so we read raw bytes via mx_get_data.
+
+struct UInt64Marshaler end
+
+function load(::UInt64Marshaler, pa::MxArray)::UInt64
+    return unsafe_load(Ptr{UInt64}(mx_get_data(pa)))
+end
+
+function store!(::UInt64Marshaler, pa::MxArray, v::Any)::Cvoid
+    ptr = Ptr{UInt64}(mx_get_data(pa))
+    unsafe_store!(ptr, convert(UInt64, v))
+    return
+end
+
+function create(::UInt64Marshaler, ::Tuple)::MxArray
+    return mx_create_numeric_matrix(Csize_t(1), Csize_t(1), mxUINT64_CLASS, mxREAL)
+end
+
+mx_class_id(::UInt64Marshaler)::Cint = mxUINT64_CLASS
 
 # ── Dispatch: pick a marshaler for a Julia type ───────────────────────────────
 
@@ -219,19 +241,21 @@ function marshaler_for(@nospecialize(T::Type))
     T === Matrix{Float64} && return MatrixFloat64Marshaler()
     T === Int32 && return Int32Marshaler()
     T === Int64 && return Int64Marshaler()
+    T === UInt64 && return UInt64Marshaler()
     T === Bool && return BoolMarshaler()
     T === SparseMatrixCSC{Float64, Int} && return SparseFloat64Marshaler()
     T === Vector{ComplexF64} && return ComplexFloat64Marshaler()
     error(
         "Mexicah: no marshaler for type $T. Supported: Float64, Vector{Float64}, " *
-        "Matrix{Float64}, Int32, Int64, Bool, SparseMatrixCSC{Float64,Int}, Vector{ComplexF64}",
+            "Matrix{Float64}, Int32, Int64, UInt64, Bool, SparseMatrixCSC{Float64,Int}, " *
+            "Vector{ComplexF64}",
     )
 end
 
 function load_arg(prhs::Ptr{Ptr{MxArray}}, k::Int, ::Type{T}) where {T}
     pa = unsafe_load(prhs, k)
     m = marshaler_for(T)
-    load(m, pa)
+    return load(m, pa)
 end
 
 function store_result(plhs::Ptr{Ptr{MxArray}}, k::Int, v::T) where {T}

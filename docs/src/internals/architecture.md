@@ -54,7 +54,7 @@ Base.@ccallable function mexFunction(
     _arg1 = Mexicah.load_arg(prhs, 1, Float64)
     _arg2 = Mexicah.load_arg(prhs, 2, Vector{Float64})
     _ret1 = MyModule.f(_arg1, _arg2)
-    Mexicah.store_result(plhs, 1, _ret1::Vector{Float64}, size(_ret1))
+    Mexicah.store_result(plhs, 1, _ret1::Vector{Float64})
     return
 end
 ```

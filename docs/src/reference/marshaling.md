@@ -10,6 +10,7 @@
 | `Int32` | `int32` scalar | `mxGetScalar` cast — **by value** | `mxCreateNumericMatrix` — **by value** |
 | `Int64` | `int64` scalar | `mxGetScalar` cast — **by value** | `mxCreateNumericMatrix` — **by value** |
 | `Bool` | `logical` scalar | `mxGetLogicals` — **by value** | `mxCreateLogicalScalar` — **by value** |
+| `UInt64` | `uint64` scalar | `mx_get_data` raw bits — **by value** | `mxCreateNumericMatrix(mxUINT64_CLASS)` |
 | `SparseMatrixCSC{Float64,Int}` | sparse double | `mxGetIr/Jc/Pr`; nzval zero-copy, indices copied | `mxCreateSparse` + index/value copy |
 | `Vector{ComplexF64}` | complex double (R2018a+) | `mxGetComplexDoubles` — **zero-copy** | `mxCreateDoubleMatrix(mxCOMPLEX)` + copy |
 

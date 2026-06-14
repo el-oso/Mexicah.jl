@@ -62,14 +62,14 @@ mx_create_logical_array(m::Csize_t, n::Csize_t)::MxArray =
 
 mx_create_numeric_matrix(m::Csize_t, n::Csize_t, classid::Cint, flag::Cint)::MxArray =
     ccall(
-        :mxCreateNumericMatrix,
-        MxArray,
-        (Csize_t, Csize_t, Cint, Cint),
-        m,
-        n,
-        classid,
-        flag,
-    )
+    :mxCreateNumericMatrix,
+    MxArray,
+    (Csize_t, Csize_t, Cint, Cint),
+    m,
+    n,
+    classid,
+    flag,
+)
 mx_get_data(pa::MxArray)::Ptr{Cvoid} =
     ccall(:mxGetData, Ptr{Cvoid}, (MxArray,), pa)
 
@@ -90,7 +90,71 @@ mx_destroy_array(pa::MxArray)::Cvoid =
 mx_duplicate_array(pa::MxArray)::MxArray =
     ccall(:mxDuplicateArray, MxArray, (MxArray,), pa)
 
+# ── Additional type queries ───────────────────────────────────────────────────
+
+mx_is_uint64(pa::MxArray)::Bool = ccall(:mxIsUint64, Cint, (MxArray,), pa) != 0
+mx_is_struct(pa::MxArray)::Bool = ccall(:mxIsStruct, Cint, (MxArray,), pa) != 0
+mx_is_char(pa::MxArray)::Bool = ccall(:mxIsChar, Cint, (MxArray,), pa) != 0
+
+# ── Struct arrays ─────────────────────────────────────────────────────────────
+# mxSTRUCT_CLASS arrays are MATLAB's representation of named-field compound types.
+# Each element has the same field names; elements are indexed 0-based (C convention).
+
+mx_get_number_of_fields(pa::MxArray)::Cint =
+    ccall(:mxGetNumberOfFields, Cint, (MxArray,), pa)
+
+function mx_get_field_name_by_number(pa::MxArray, n::Cint)::String
+    ptr = ccall(:mxGetFieldNameByNumber, Ptr{UInt8}, (MxArray, Cint), pa, n)
+    ptr == C_NULL && error("mxGetFieldNameByNumber: invalid field index $n")
+    return unsafe_string(ptr)
+end
+
+function mx_get_field(pa::MxArray, index::Csize_t, fieldname::String)::MxArray
+    return ccall(:mxGetField, MxArray, (MxArray, Csize_t, Cstring), pa, index, fieldname)
+end
+
+function mx_set_field!(pa::MxArray, index::Csize_t, fieldname::String, value::MxArray)::Cvoid
+    ccall(:mxSetField, Cvoid, (MxArray, Csize_t, Cstring, MxArray), pa, index, fieldname, value)
+    return
+end
+
+function mx_add_field!(pa::MxArray, fieldname::String)::Cint
+    return ccall(:mxAddField, Cint, (MxArray, Cstring), pa, fieldname)
+end
+
+# fieldnames must outlive this call; we build explicit null-terminated byte vectors.
+function mx_create_struct_matrix(m::Csize_t, n::Csize_t, fieldnames::Vector{String})::MxArray
+    cnames = [vcat(codeunits(s), UInt8(0)) for s in fieldnames]
+    ptrs = pointer.(cnames)
+    GC.@preserve cnames begin
+        return ccall(
+            :mxCreateStructMatrix,
+            MxArray,
+            (Csize_t, Csize_t, Cint, Ptr{Ptr{UInt8}}),
+            m,
+            n,
+            Cint(length(fieldnames)),
+            ptrs,
+        )
+    end
+end
+
+# ── Char arrays (strings) ─────────────────────────────────────────────────────
+
+function mx_get_string(pa::MxArray)::String
+    # mxGetNumberOfElements gives the character count (incl. terminator in R2018a+)
+    n = Int(mx_get_number_of_elements(pa))
+    buf = Vector{UInt8}(undef, n + 1)
+    rc = ccall(:mxGetString, Cint, (MxArray, Ptr{UInt8}, Csize_t), pa, buf, Csize_t(n + 1))
+    rc != 0 && error("mxGetString failed")
+    return unsafe_string(pointer(buf))
+end
+
+function mx_create_string(s::String)::MxArray
+    return ccall(:mxCreateString, MxArray, (Cstring,), s)
+end
+
 # ── MEX error / output ────────────────────────────────────────────────────────
 
-mex_errorf(id::Cstring, msg::Cstring)::Cvoid =
+mex_errorf(id::AbstractString, msg::AbstractString)::Cvoid =
     ccall(:mexErrMsgIdAndTxt, Cvoid, (Cstring, Cstring), id, msg)

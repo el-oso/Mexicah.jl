@@ -19,18 +19,18 @@ function _enzyme_gradient_mex(f, grad_name::Symbol, output::String)
         error("@mexgradient: $f must accept a single Vector{Float64} argument")
 
     # Build a wrapper function that calls Enzyme and returns the gradient.
-    grad_f = function (x::Vector{Float64})::Vector{Float64}
+    grad_f = function (x::Vector{Float64},)::Vector{Float64}
         dx = zero(x)
         Enzyme.autodiff(Enzyme.Reverse, f, Enzyme.Active, Enzyme.Duplicated(x, dx))
-        dx
+        return dx
     end
 
-    build_mex(
+    return build_mex(
         grad_f;
-        input_types=Type[Vector{Float64}],
-        output_types=Type[Vector{Float64}],
-        name=grad_name,
-        output=output,
+        input_types = Type[Vector{Float64}],
+        output_types = Type[Vector{Float64}],
+        name = grad_name,
+        output = output,
     )
 end
 

@@ -72,5 +72,5 @@ need Julia installed. The bundle is self-contained.
 
 !!! tip "Runtime sharing"
     When multiple MEX files built with Mexicah are in the same directory,
-    they all share the same `libjulia.so`. The Julia runtime is initialised
+    they all share the same `libjulia.so`. The Julia runtime is initialized
     exactly once per MATLAB session regardless of how many MEX files are loaded.

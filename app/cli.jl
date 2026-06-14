@@ -102,7 +102,7 @@ function compile_cmd(args::Vector{String})::Cint
     mod === nothing && return 1
 
     if all_exported
-        build_all_mex(; output=output, trim=trim, bundle=bundle, juliac_bin=juliac_bin)
+        build_all_mex(; output = output, trim = trim, bundle = bundle, juliac_bin = juliac_bin)
     else
         for fname in functions
             sym = Symbol(strip(fname))
@@ -116,19 +116,19 @@ function compile_cmd(args::Vector{String})::Cint
                 println(
                     stderr,
                     "mexicah: '$sym' has no registered type signature. " *
-                    "Annotate it with @mexfunction or register manually.",
+                        "Annotate it with @mexfunction or register manually.",
                 )
                 return 1
             end
             build_mex(
                 f;
-                input_types=info.argtypes,
-                output_types=info.rettypes,
-                name=sym,
-                output=output,
-                trim=trim,
-                bundle=bundle,
-                juliac_bin=juliac_bin,
+                input_types = info.argtypes,
+                output_types = info.rettypes,
+                name = sym,
+                output = output,
+                trim = trim,
+                bundle = bundle,
+                juliac_bin = juliac_bin,
             )
         end
     end
@@ -136,7 +136,7 @@ function compile_cmd(args::Vector{String})::Cint
 end
 
 function _load_source(source::String)::Union{Module, Nothing}
-    if isfile(source)
+    return if isfile(source)
         try
             return Base.include(Main, abspath(source))
         catch e
