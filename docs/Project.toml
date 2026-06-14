@@ -2,9 +2,13 @@
 Documenter         = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DocumenterVitepress = "4710194d-e776-4893-9690-8d956a29c365"
 Mexicah            = "28b42ba6-5630-446f-bcf8-82236b20fd10"
+TypeContracts = "c7a3f1e2-84b5-4d69-9e0a-1f2b3c4d5e6f"
 
 [sources]
 Mexicah = {path = ".."}
+TypeContracts = {url = "https://github.com/el-oso/TypeContracts.jl", rev = "master"}
+
+
 
 [compat]
 Documenter          = "1"

@@ -5,8 +5,10 @@ makedocs(;
     sitename = "Mexicah.jl",
     authors = "el_oso",
     format = DocumenterVitepress.MarkdownVitepress(;
-        devbranch = "master",
         repo = "github.com/el-oso/Mexicah.jl",
+        devbranch = "master",
+        devurl = "dev",
+        sidebar_drawer = true,
     ),
     pages = [
         "Home" => "index.md",
@@ -47,8 +49,6 @@ makedocs(;
 
 deploydocs(;
     repo = "github.com/el-oso/Mexicah.jl",
-    target = "build",
-    branch = "gh-pages",
     devbranch = "master",
     push_preview = true,
 )
