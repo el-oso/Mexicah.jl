@@ -199,17 +199,23 @@ uuid = "d0879d2d-cac2-40c8-9cee-1863dc0c7391"
 version = "0.1.3"
 
 [[deps.Mexicah]]
-deps = ["SparseArrays", "TypeContracts"]
+deps = ["LinearAlgebra", "SparseArrays", "TypeContracts"]
 path = ".."
 uuid = "28b42ba6-5630-446f-bcf8-82236b20fd10"
-version = "0.1.0"
+version = "0.7.0"
 
     [deps.Mexicah.extensions]
+    MexicahDataFramesExt = "DataFrames"
     MexicahEnzymeExt = "Enzyme"
+    MexicahForwardDiffExt = "ForwardDiff"
+    MexicahJuMPExt = "JuMP"
     MexicahMTKExt = "ModelingToolkit"
 
     [deps.Mexicah.weakdeps]
+    DataFrames = "a93c6f00-e57d-5684-b466-afe8fa294f38"
     Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+    ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+    JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
     ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 
 [[deps.MozillaCACerts_jll]]
