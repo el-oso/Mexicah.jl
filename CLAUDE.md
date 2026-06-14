@@ -34,7 +34,9 @@ juliac --output-exe mexicah --trim=safe app/cli.jl
 | `contracts.jl` | `AbstractMexMarshaler` and `AbstractMexExportable` TypeContracts interfaces; `@verify` for all marshalers; `_reinit_registry!` |
 | `runtime.jl` | `_mexicah_init_once()` — atomic init guard for each MEX file |
 | `codegen.jl` | `generate_mex_source(...)` — generates the Julia file passed to juliac |
-| `build.jl` | `build_mex(...)` — juliac subprocess pipeline; `_write_setup_m` |
+| `cuda_driver.jl` | Raw `libcuda` ccall wrappers (`_cu_*`, `_cuda_init_once!`) for the GPU MEX runtime — no CUDA.jl dependency |
+| `cuda_codegen.jl` | `generate_cuda_mex_source(...)` — GPU MEX wrapper embedding PTX; `_parse_ptx_entry` |
+| `build.jl` | `build_mex(...)` + `_compile_generated_source(...)` — juliac subprocess pipeline; `_write_setup_m` |
 | `macros.jl` | `@mexfunction`, `@mexgradient`, `_MEX_EXPORTS` registry, `build_all_mex` |
 
 Extensions in `ext/`:
@@ -43,6 +45,7 @@ Extensions in `ext/`:
 - `MexicahForwardDiffExt.jl` — `_forwarddiff_gradient_mex` via `ForwardDiff.gradient`
 - `MexicahJuMPExt.jl` — stateless LP/QP solvers + handle-based JuMP model lifecycle
 - `MexicahMTKExt.jl` — `build_mex_from_mtk` via `MTK.generate_rhs/jacobian`
+- `MexicahCUDAExt.jl` — build-time only; extracts PTX from a KernelAbstractions `@kernel` (via CUDA's `@device_code_ptx`) for `@mexgpukernel`. Requires both CUDA and KernelAbstractions (dual trigger). Never compiled into the MEX.
 
 Core src additions:
 - `handles.jl` — thread-safe `_handle_store!` / `_handle_get` / `_handle_delete!` / `_handle_count`; opaque UInt64 IDs bridge Julia heap objects to MATLAB

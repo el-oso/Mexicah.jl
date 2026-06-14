@@ -14,6 +14,7 @@ Each example is a self-contained Julia file in `examples/` and a matching docume
 |        [DataFrames](dataframes.md) | Handle-based DataFrame lifecycle and value-copy struct conversion |
 |       [JuMP optimization](jump.md) |          Stateless LP/QP solvers and handle-based model lifecycle |
 |         [LinearAlgebra](linalg.md) |      SVD, eigenproblem, QR, Cholesky, and handle-based LU solvers |
+|      [GPU kernels (CUDA)](cuda.md) |              KernelAbstractions `@kernel` → PTX → driver-only MEX |
 
 
 Run any example with:

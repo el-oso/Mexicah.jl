@@ -1,7 +1,7 @@
 
 # Mexicah.jl {#Mexicah.jl}
 > 
-> **Pronunciation:** _Me-shee-cah_ — named after the Mexica, the Nahuatl-speaking people of central Mexico.
+> **Pronunciation:** _meh-SHEE-kah_ — named after the Mexica, the Nahuatl-speaking people of central Mexico.
 > 
 
 
