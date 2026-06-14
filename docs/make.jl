@@ -14,6 +14,7 @@ makedocs(;
             "guide/installation.md",
             "guide/quickstart.md",
             "guide/runtime.md",
+            "guide/comparison.md",
         ],
         "Examples" => [
             "examples/index.md",

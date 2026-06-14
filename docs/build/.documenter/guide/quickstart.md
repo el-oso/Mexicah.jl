@@ -76,6 +76,6 @@ Distribute the contents of `./mex/` to your MATLAB users. They do **not** need J
 
 ::: tip Runtime sharing
 
-When multiple MEX files built with Mexicah are in the same directory, they all share the same `libjulia.so`. The Julia runtime is initialised exactly once per MATLAB session regardless of how many MEX files are loaded.
+When multiple MEX files built with Mexicah are in the same directory, they all share the same `libjulia.so`. The Julia runtime is initialized exactly once per MATLAB session regardless of how many MEX files are loaded.
 
 :::
