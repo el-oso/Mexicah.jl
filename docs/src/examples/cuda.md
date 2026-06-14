@@ -27,15 +27,17 @@ loaders, the same `@kernel` will target them through a new extension. Today,
 
 ## Requirements
 
-Build-time only (the developer's machine):
+Build-time only (the developer's machine): CUDA.jl and KernelAbstractions.jl.
+They are **weak** dependencies of Mexicah — loading them activates
+`MexicahCUDAExt` — and are **not** needed by anyone running the finished MEX.
 
-```julia
-using Pkg
-Pkg.add(["CUDA", "KernelAbstractions"])
+Because they are weak deps, they cannot be loaded from Mexicah's own project, so
+GPU MEX files are built from a small environment that lists them alongside
+Mexicah. This repository ships one at `examples/`:
+
+```bash
+julia --project=examples -e 'using Pkg; Pkg.instantiate()'   # once
 ```
-
-These are weak dependencies — adding them activates `MexicahCUDAExt`. They are
-**not** needed by anyone running the finished MEX.
 
 ## Example: vector add
 
@@ -62,7 +64,7 @@ end
 Build it:
 
 ```bash
-julia --project=. examples/cuda_vector_add.jl
+julia --project=examples examples/cuda_vector_add.jl
 ```
 
 ## MATLAB session

@@ -37,6 +37,33 @@ function _extract_ptx(kernelobj, dummy_args, block_dim::Int)
     return ptx, entry
 end
 
+# Reach KA's launch-context constructor across CUDA.jl versions.
+_mkcontext(kobj, ndrange, iterspace) =
+    isdefined(CUDA, :mkcontext) ? CUDA.mkcontext(kobj, ndrange, iterspace) :
+    KernelAbstractions.mkcontext(kobj, ndrange, iterspace)
+
+# Measure the size of KA's `CompilerMetadata` param and confirm the runtime ABI
+# the generated wrapper relies on: launched with a *dynamic* ndrange the metadata
+# is a real (non-ghost) param whose bytes are `[n, cld(n, block)]` (both Int64).
+# cuda_codegen.jl writes exactly those words; if a future KA changes the layout
+# this errors at build time rather than producing a silently wrong MEX.
+function _meta_param_bytes(kernelobj, block_dim::Int)::Int
+    kobj = kernelobj(CUDABackend(), block_dim)
+    sz = 0
+    # Lengths that are not multiples of block_dim, to exercise the n/nblocks split.
+    for n in (997, 2003)
+        ndrange, _, iterspace, _ = KernelAbstractions.launch_config(kobj, (n,), nothing)
+        ctx = _mkcontext(kobj, ndrange, iterspace)
+        words = reinterpret(Int64, [ctx])
+        (length(words) >= 2 && words[1] == n && words[2] == cld(n, block_dim)) || error(
+            "MexicahCUDAExt: CompilerMetadata layout $(words) ≠ expected [n=$n, nblocks=$(cld(n, block_dim))]; " *
+                "the runtime ABI in cuda_codegen.jl assumes meta = [n, cld(n, block)].",
+        )
+        sz = sizeof(typeof(ctx))
+    end
+    return sz
+end
+
 """
     _ka_cuda_build_mex(kernelobj, mex_name, argtypes, rettypes, block_dim, output) -> String
 
@@ -68,13 +95,22 @@ function _ka_cuda_build_mex(
 
     ptx, entry = _extract_ptx(kernelobj, dummy_args, block_dim)
 
-    # Static-ndrange KA metadata is a zero-size leading argument and contributes
-    # no kernel parameter; see cuda_codegen.jl. If a future KA emits a non-ghost
-    # context this is where its constant bytes would be supplied.
-    meta_bytes = UInt8[]
+    # The real kernel ABI (see cuda_codegen.jl): CUDA.jl prepends a `KernelState`
+    # param, KA prepends a `CompilerMetadata` param, then the CuDeviceArrays.
+    state_bytes = sizeof(CUDA.KernelState)
+    meta_bytes = _meta_param_bytes(kernelobj, block_dim)
+
+    # Cross-check against the PTX param list (ground truth): the entry must declare
+    # exactly [KernelState, CompilerMetadata, (1 + n_inputs)×CuDeviceArray(32B)].
+    param_sizes = Mexicah._parse_ptx_param_sizes(ptx)
+    expected = Int[state_bytes, meta_bytes, fill(Mexicah._CU_DEVARRAY_SIZE, 1 + n_inputs)...]
+    param_sizes == expected || error(
+        "MexicahCUDAExt: PTX kernel param sizes $(param_sizes) ≠ expected $(expected); " *
+            "the kernel-launch ABI assumed by cuda_codegen.jl does not match this kernel.",
+    )
 
     src = Mexicah.generate_cuda_mex_source(
-        mex_name, entry, ptx, n_inputs, meta_bytes, block_dim,
+        mex_name, entry, ptx, n_inputs, block_dim, state_bytes, meta_bytes,
     )
     return Mexicah._compile_generated_source(src, mex_name, output)
 end

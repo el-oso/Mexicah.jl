@@ -14,8 +14,9 @@ end
 @testitem "generate_cuda_mex_source produces valid, correct wrapper" begin
     using Mexicah, Test
 
+    # state_bytes=16 (KernelState), meta_bytes=16 (CompilerMetadata), 2 inputs.
     src = Mexicah.generate_cuda_mex_source(
-        :vector_add, "vadd_entry", ".visible .entry vadd_entry(){ret;}", 2, UInt8[], 256,
+        :vector_add, "vadd_entry", ".visible .entry vadd_entry(){ret;}", 2, 256, 16, 16,
     )
     ex = Meta.parse("begin\n" * src * "\nend")
     @test ex isa Expr
@@ -28,44 +29,66 @@ end
     @test occursin("_cuda_init_once!", src)
     @test occursin("_cu_launch", src)
     @test occursin("store_result(plhs, 1, _out)", src)
+    # CompilerMetadata is written from the runtime length, not a constant blob.
+    @test occursin("Int64(_n)", src)
+    @test occursin("Int64(_gx)", src)
+    @test !occursin("_META", src)
 end
 
 @testitem "generate_cuda_mex_source argbuf layout scales with inputs" begin
     using Mexicah, Test
 
-    # 1 input → output + 1 input = 2 CuDeviceArrays = 64 bytes, 2 kernelParams
-    src1 = Mexicah.generate_cuda_mex_source(:f1, "k1", ".entry k1(){ret;}", 1, UInt8[], 128)
-    @test occursin("zeros(UInt8, 64)", src1)
-    @test occursin("Vector{Ptr{Cvoid}}(undef, 2)", src1)
+    # state(16) + meta(16) + output(32) + 1 input(32) = 96 bytes; 4 kernelParams
+    # (state, meta, output, input).
+    src1 = Mexicah.generate_cuda_mex_source(:f1, "k1", ".entry k1(){ret;}", 1, 128, 16, 16)
+    @test occursin("zeros(UInt8, 96)", src1)
+    @test occursin("Vector{Ptr{Cvoid}}(undef, 4)", src1)
     @test occursin("Expected 1 input(s)", src1)
 
-    # 3 inputs → output + 3 inputs = 4 CuDeviceArrays = 128 bytes, 4 kernelParams
-    src3 = Mexicah.generate_cuda_mex_source(:f3, "k3", ".entry k3(){ret;}", 3, UInt8[], 256)
-    @test occursin("zeros(UInt8, 128)", src3)
-    @test occursin("Vector{Ptr{Cvoid}}(undef, 4)", src3)
+    # state(16) + meta(16) + output(32) + 3 inputs(96) = 160 bytes; 6 kernelParams.
+    src3 = Mexicah.generate_cuda_mex_source(:f3, "k3", ".entry k3(){ret;}", 3, 256, 16, 16)
+    @test occursin("zeros(UInt8, 160)", src3)
+    @test occursin("Vector{Ptr{Cvoid}}(undef, 6)", src3)
 end
 
-@testitem "generate_cuda_mex_source embeds metadata blob when present" begin
+@testitem "generate_cuda_mex_source writes KernelState + CompilerMetadata params" begin
     using Mexicah, Test
 
-    meta = UInt8[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]
-    src = Mexicah.generate_cuda_mex_source(:fm, "km", ".entry km(){ret;}", 1, meta, 64)
+    src = Mexicah.generate_cuda_mex_source(:fm, "km", ".entry km(){ret;}", 1, 64, 16, 16)
     ex = Meta.parse("begin\n" * src * "\nend")
     @test ex isa Expr
-    @test occursin("const _META = UInt8[", src)
-    @test occursin("unsafe_copyto!", src)
-    # meta(8 bytes) aligned, then output(32) + input(32) → 72 total, 3 kernelParams
-    @test occursin("zeros(UInt8, 72)", src)
-    @test occursin("Vector{Ptr{Cvoid}}(undef, 3)", src)
+    # KernelState at offset 0 (zero-filled), CompilerMetadata at offset 16 carrying
+    # [n, nblocks]; first kernelParam points at the state buffer (offset 0).
+    @test occursin("unsafe_store!(Ptr{Int64}(_bp + 16 + 0), Int64(_n))", src)
+    @test occursin("unsafe_store!(Ptr{Int64}(_bp + 16 + 8), Int64(_gx))", src)
+    @test occursin("_kparams[1] = Ptr{Cvoid}(_bp + 0)", src)
+    @test occursin("_kparams[2] = Ptr{Cvoid}(_bp + 16)", src)
 end
 
 @testitem "PTX with newlines and \$ symbols embeds as a valid literal" begin
     using Mexicah, Test
     ptx = ".visible .entry k\$0(\n.reg .f64 %fd<2>;\n ret;\n)\n"
-    src = Mexicah.generate_cuda_mex_source(:k, "k\$0", ptx, 1, UInt8[], 32)
+    src = Mexicah.generate_cuda_mex_source(:k, "k\$0", ptx, 1, 32, 16, 16)
     ex = Meta.parse("begin\n" * src * "\nend")
     @test ex isa Expr
     @test !any(a -> a isa Expr && a.head === :error, ex.args)
+end
+
+@testitem "_parse_ptx_param_sizes reads the entry param byte sizes" begin
+    using Mexicah, Test
+    ptx = """
+    .visible .entry foo(
+    \t.param .align 8 .b8 foo_param_0[16],
+    \t.param .align 8 .b8 foo_param_1[16],
+    \t.param .align 8 .b8 foo_param_2[32]
+    )
+    {
+    \tret;
+    }
+    """
+    @test Mexicah._parse_ptx_param_sizes(ptx) == [16, 16, 32]
+    @test Mexicah._parse_ptx_param_sizes(".entry bar(){ret;}") == Int[]
+    @test Mexicah._parse_ptx_param_sizes("no entry here") == Int[]
 end
 
 # ── GPU integration (requires NVIDIA GPU + CUDA.jl + KernelAbstractions) ───────
@@ -99,6 +122,15 @@ end
             @test !isempty(ptx)
             @test occursin(".entry", ptx)
             @test entry == Mexicah._parse_ptx_entry(ptx)
+
+            # Real kernel-launch ABI: [KernelState, CompilerMetadata, 3×CuDeviceArray].
+            psz = Mexicah._parse_ptx_param_sizes(ptx)
+            @test length(psz) == 5
+            @test psz[1] == sizeof(CUDA.KernelState)
+            @test psz[(end - 2):end] == [32, 32, 32]
+            # CompilerMetadata carries [n, nblocks]; the build path measures and
+            # validates this layout.
+            @test ext._meta_param_bytes(_vadd_test!, 256) == psz[2]
         end
     end
 end

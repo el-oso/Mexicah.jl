@@ -16,11 +16,24 @@
 #   len::Int                       offset 24   (8 bytes)
 #                                  total size  32 bytes
 #
-# KernelAbstractions prepends a `__ctx__::CompilerMetadata` argument. Launched
-# with a fully static ndrange it is a zero-size (ghost) type and contributes no
-# kernel parameter, so `meta_bytes` is empty. The build-time extension passes
-# its constant bytes if that ever changes; this keeps the runtime ABI a single
-# centralized assumption, validated by the :cuda GPU smoke test.
+# The full kernel parameter list, verified against the emitted PTX on real
+# hardware (RTX 4070, CUDA driver 13.0, CUDA.jl + KernelAbstractions), is:
+#
+#   param 0  CUDA.KernelState        state_bytes   (exception_info ptr + seed)
+#   param 1  KA.CompilerMetadata     meta_bytes    ([n, nblocks], both Int64)
+#   param 2  output  CuDeviceArray   32
+#   param 3+ inputs  CuDeviceArray   32 each
+#
+# Two leading params the earlier MVP wrongly assumed away:
+#   • CUDA.jl prepends a hidden `KernelState`. MVP @inbounds kernels never read
+#     it (the PTX declares but never loads param 0), so we pass it zero-filled.
+#   • KA's `CompilerMetadata` is NOT a ghost: launched with a *dynamic* ndrange
+#     (as the build-time PTX extraction does) it carries the ndrange, so it is a
+#     real param. For a 1-D `@index(Global)` kernel its bytes are
+#     `[n::Int64, nblocks::Int64]`; the kernel reads `n` (meta[0]) as the bounds
+#     check `global_index > n → return`. We therefore write `n` and
+#     `cld(n, block)` into it at runtime. `state_bytes`/`meta_bytes` are measured
+#     by the build-time extension and cross-checked against the PTX param sizes.
 #
 # Kernel argument order (matches the @kernel signature convention the macro
 # documents): (output, inputs...).
@@ -37,6 +50,20 @@ function _parse_ptx_entry(ptx::String)::Union{String, Nothing}
     return String(m.captures[1])
 end
 
+# Byte sizes of each `.param` in the first `.entry`'s parameter list, in order.
+# Each param is declared `.param .align 8 .b8 <name>[SIZE]`; the SIZEs are the
+# ground-truth ABI (e.g. [16, 16, 32, 32, 32] for KernelState + CompilerMetadata
+# + three CuDeviceArrays). Used by the build-time extension to validate that the
+# layout this codegen assumes matches what the kernel actually declares.
+function _parse_ptx_param_sizes(ptx::String)::Vector{Int}
+    # The param list runs from the entry's `(` to the first `)`; PTX places
+    # `.maxntid`/other directives between that `)` and the body `{`, and params
+    # never contain `)`, so anchor on the closing paren rather than the brace.
+    m = match(r"\.entry\s+[A-Za-z_][\w$]*\s*\(([^)]*)\)", ptx)
+    m === nothing && return Int[]
+    return Int[parse(Int, x.captures[1]) for x in eachmatch(r"\.param[^\[]*\[(\d+)\]", m.captures[1])]
+end
+
 # Embed an arbitrary ASCII string (PTX blob, entry symbol, …) as a valid Julia
 # string literal. PTX and some symbol names use `$` and newlines, so escape both
 # (escape_string handles `"`, `\`, control chars; the extra `\$` guards against
@@ -46,37 +73,40 @@ function _jl_str_literal(s::String)::String
 end
 
 """
-    generate_cuda_mex_source(mex_name, entry, ptx, n_inputs, meta_bytes, block_dim) -> String
+    generate_cuda_mex_source(mex_name, entry, ptx, n_inputs, block_dim, state_bytes, meta_bytes) -> String
 
 Return the full Julia source of a GPU MEX wrapper.
 
-- `mex_name`   — MATLAB-visible function name.
-- `entry`      — PTX `.entry` symbol name to launch.
-- `ptx`        — the PTX module text.
-- `n_inputs`   — number of `Vector{Float64}` inputs (kernel takes output + these).
-- `meta_bytes` — constant bytes of KernelAbstractions' leading context argument
-                 (empty when it is a zero-size static-ndrange type).
-- `block_dim`  — threads per block; grid is `cld(n, block_dim)`.
+- `mex_name`    — MATLAB-visible function name.
+- `entry`       — PTX `.entry` symbol name to launch.
+- `ptx`         — the PTX module text.
+- `n_inputs`    — number of `Vector{Float64}` inputs (kernel takes output + these).
+- `block_dim`   — threads per block; grid is `cld(n, block_dim)`.
+- `state_bytes` — size of the leading CUDA.jl `KernelState` param; passed
+                  zero-filled (0 ⇒ no such param).
+- `meta_bytes`  — size of KernelAbstractions' `CompilerMetadata` param. Filled at
+                  runtime with `[n, cld(n, block_dim)]` (0 ⇒ no such param).
 """
 function generate_cuda_mex_source(
         mex_name::Symbol,
         entry::String,
         ptx::String,
         n_inputs::Int,
-        meta_bytes::Vector{UInt8},
         block_dim::Int,
+        state_bytes::Int,
+        meta_bytes::Int,
     )::String
-    has_meta = !isempty(meta_bytes)
-    mlen = length(meta_bytes)
+    has_state = state_bytes > 0
+    has_meta = meta_bytes > 0
 
-    # Lay out argument blobs sequentially in one 8-aligned buffer.
-    off_meta = 0
-    off_out = has_meta ? _align8(mlen) : 0
-    off_inputs = Int[off_out + _CU_DEVARRAY_SIZE + (i - 1) * _CU_DEVARRAY_SIZE for i in 1:n_inputs]
+    # Lay out argument blobs sequentially in one 8-aligned buffer:
+    #   [ KernelState | CompilerMetadata | output | inputs... ]
+    off_state = 0
+    off_meta = has_state ? _align8(state_bytes) : 0
+    off_out = off_meta + (has_meta ? _align8(meta_bytes) : 0)
+    off_inputs = Int[off_out + _CU_DEVARRAY_SIZE * i for i in 1:n_inputs]
     total = off_out + _CU_DEVARRAY_SIZE * (1 + n_inputs)
-    nparams = (has_meta ? 1 : 0) + 1 + n_inputs
-
-    meta_decl = has_meta ? "const _META = UInt8[$(join(meta_bytes, ", "))]\n" : ""
+    nparams = (has_state ? 1 : 0) + (has_meta ? 1 : 0) + 1 + n_inputs
 
     load_lines = String[]
     h2d_lines = String[]
@@ -105,8 +135,15 @@ function generate_cuda_mex_source(
         )
     end
 
+    # The KernelState param stays zero-filled (the argbuf is zero-initialized);
+    # MVP @inbounds kernels never read it. The CompilerMetadata param carries the
+    # dynamic ndrange: meta[0]=n (read as the bounds check), meta[8]=nblocks.
     blob_lines = String[]
-    has_meta && push!(blob_lines, "        unsafe_copyto!(_bp + $off_meta, pointer(_META), $mlen)")
+    if has_meta
+        push!(blob_lines, "        unsafe_store!(Ptr{Int64}(_bp + $off_meta + 0), Int64(_n))")
+        meta_bytes >= 16 &&
+            push!(blob_lines, "        unsafe_store!(Ptr{Int64}(_bp + $off_meta + 8), Int64(_gx))")
+    end
     push!(blob_lines, blob_writes(off_out, "_d_out"))
     for i in 1:n_inputs
         push!(blob_lines, blob_writes(off_inputs[i], "_d_in$i"))
@@ -115,6 +152,10 @@ function generate_cuda_mex_source(
     # kernelParams pointer entries, in kernel-argument order.
     kparam_lines = String[]
     pidx = 1
+    if has_state
+        push!(kparam_lines, "        _kparams[$pidx] = Ptr{Cvoid}(_bp + $off_state)")
+        pidx += 1
+    end
     if has_meta
         push!(kparam_lines, "        _kparams[$pidx] = Ptr{Cvoid}(_bp + $off_meta)")
         pidx += 1
@@ -134,7 +175,7 @@ function generate_cuda_mex_source(
 
     const _PTX = $(_jl_str_literal(ptx))
     const _ENTRY = $(_jl_str_literal(entry))
-    $(meta_decl)const _MOD = Ref{Ptr{Cvoid}}(C_NULL)
+    const _MOD = Ref{Ptr{Cvoid}}(C_NULL)
     const _FN = Ref{Ptr{Cvoid}}(C_NULL)
     const _GPU_LOADED = Threads.Atomic{Int}(0)
 
@@ -164,6 +205,7 @@ function generate_cuda_mex_source(
 
     $(join(load_lines, "\n"))
         _n = length(_in1)
+        _gx = cld(_n, $block_dim)
 
         _d_out = Mexicah._cu_alloc(_n * 8)
     $(join(h2d_lines, "\n"))
@@ -175,7 +217,6 @@ function generate_cuda_mex_source(
             _bp = pointer(_argbuf)
     $(join(blob_lines, "\n"))
     $(join(kparam_lines, "\n"))
-            _gx = cld(_n, $block_dim)
             Mexicah._cu_launch(_FN[], _gx, 1, 1, $block_dim, 1, 1, 0, pointer(_kparams))
             Mexicah._cu_sync()
             Mexicah._cu_d2h(Ptr{Cvoid}(pointer(_out)), _d_out, _n * 8)

@@ -1,0 +1,16 @@
+# Build environment for the GPU example(s).
+#
+# CUDA and KernelAbstractions are *weak* dependencies of Mexicah (they trigger
+# MexicahCUDAExt and are never compiled into a MEX). To BUILD a GPU MEX you need
+# them loadable, which a package's own project cannot do for its weakdeps — hence
+# this dedicated environment. Instantiate once, then:
+#   julia --project=examples examples/cuda_vector_add.jl
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+Mexicah = "28b42ba6-5630-446f-bcf8-82236b20fd10"
+TypeContracts = "c7a3f1e2-84b5-4d69-9e0a-1f2b3c4d5e6f"
+
+[sources]
+Mexicah = {path = ".."}
+TypeContracts = {url = "/home/el_oso/Documents/claude/TypeContracts", rev = "master"}
