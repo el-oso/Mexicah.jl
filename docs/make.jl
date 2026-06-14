@@ -22,6 +22,8 @@ makedocs(;
             "examples/sparse.md",
             "examples/ad_enzyme.md",
             "examples/mtk_ode.md",
+            "examples/handles.md",
+            "examples/dataframes.md",
         ],
         "Reference" => [
             "reference/api.md",

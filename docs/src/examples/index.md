@@ -12,6 +12,7 @@ side by side.
 | [Enzyme gradient](ad_enzyme.md) | Reverse-mode AD via `@mexgradient` |
 | [ModelingToolkit ODE](mtk_ode.md) | Spring-mass system RHS + Jacobian MEX |
 | [Opaque handles](handles.md) | Persist Julia structs across MEX calls via `UInt64` registry keys |
+| [DataFrames](dataframes.md) | Handle-based DataFrame lifecycle and value-copy struct conversion |
 
 Run any example with:
 
