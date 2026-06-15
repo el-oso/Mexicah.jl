@@ -32,9 +32,9 @@ function generate_mex_source(
 
     Base.@ccallable function mexFunction(
         nlhs::Cint,
-        plhs::Ptr{Ptr{Mexicah.MxArray}},
+        plhs::Ptr{Mexicah.MxArray},
         nrhs::Cint,
-        prhs::Ptr{Ptr{Mexicah.MxArray}},
+        prhs::Ptr{Mexicah.MxArray},
     )::Cvoid
         Mexicah._mexicah_init_once()
     $check_stmt

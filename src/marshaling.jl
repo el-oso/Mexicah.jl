@@ -268,13 +268,17 @@ function marshaler_for(@nospecialize(T::Type))
     )
 end
 
-function load_arg(prhs::Ptr{Ptr{MxArray}}, k::Int, ::Type{T}) where {T}
+# prhs/plhs are the MEX `mxArray *prhs[]` / `mxArray *plhs[]` arrays, i.e.
+# `mxArray**`. Since MxArray == Ptr{Cvoid} is the `mxArray*` handle, these are
+# `Ptr{MxArray}` (NOT `Ptr{Ptr{MxArray}}` — that extra level made unsafe_load
+# yield a Ptr{MxArray} and load/store dispatch fail with a MethodError at runtime).
+function load_arg(prhs::Ptr{MxArray}, k::Int, ::Type{T}) where {T}
     pa = unsafe_load(prhs, k)
     m = marshaler_for(T)
     return load(m, pa)
 end
 
-function store_result(plhs::Ptr{Ptr{MxArray}}, k::Int, v::T) where {T}
+function store_result(plhs::Ptr{MxArray}, k::Int, v::T) where {T}
     m = marshaler_for(T)
     dims = ndims(v) == 0 ? () : size(v)
     pa = create(m, dims)
@@ -283,7 +287,7 @@ function store_result(plhs::Ptr{Ptr{MxArray}}, k::Int, v::T) where {T}
     return
 end
 
-function store_result(plhs::Ptr{Ptr{MxArray}}, k::Int, v::String)
+function store_result(plhs::Ptr{MxArray}, k::Int, v::String)
     unsafe_store!(plhs, mx_create_string(v), k)
     return
 end

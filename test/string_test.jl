@@ -32,7 +32,8 @@ end
     slot = Vector{Mexicah.MxArray}(undef, 1)
     slot[1] = C_NULL
     GC.@preserve slot begin
-        plhs = Ptr{Ptr{Mexicah.MxArray}}(pointer(slot))
+        # plhs is `mxArray *plhs[]` == `mxArray**` == Ptr{MxArray}.
+        plhs = pointer(slot)
         Mexicah.store_result(plhs, 1, "hello, Mexicah!")
     end
     pa = slot[1]
