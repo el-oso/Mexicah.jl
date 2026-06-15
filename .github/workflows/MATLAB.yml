@@ -93,14 +93,21 @@ jobs:
         with:
           release: latest
 
-      # NOTE: non-blocking for now. The MEX builds and MATLAB loads it, but a
-      # juliac --output-lib has no initialized Julia runtime when MATLAB dlopens
-      # it (it exports mexFunction but no jl_init / load constructor), so the
-      # first call segfaults MATLAB. Initializing libjulia inside the MEX is a
-      # separate Mexicah-runtime change; until then this step documents the gap
-      # without failing the workflow (the build steps above are the real gate).
+      # NOTE: non-blocking while the MATLAB-load crash is being fixed. The juliac
+      # lib self-inits its runtime on dlopen (handle-signals=no by default), yet
+      # MATLAB still hard-crashes loading it — a load/symbol or library conflict.
+      # The crash-dump step below captures the exact cause to drive the fix.
       - uses: matlab-actions/run-tests@v3
         continue-on-error: true
         with:
           source-folder: mex
           select-by-folder: test/matlab
+
+      - name: Show MATLAB crash dump (diagnostic)
+        if: always() && runner.os != 'Windows'
+        shell: bash
+        run: |
+          echo "=== searching for MATLAB crash dumps ==="
+          found=$(find "$HOME" /tmp "$RUNNER_TEMP" "${{ github.workspace }}" -maxdepth 3 -name 'matlab_crash_dump*' 2>/dev/null)
+          if [ -z "$found" ]; then echo "(no crash dump found)"; fi
+          for f in $found; do echo "----- $f -----"; sed -n '1,120p' "$f"; done
