@@ -101,7 +101,9 @@ function _type_literal(T::Type)::String
     T === Int64 && return "Int64"
     T === UInt64 && return "UInt64"
     T === Bool && return "Bool"
-    T === SparseMatrixCSC{Float64, Int} && return "SparseArrays.SparseMatrixCSC{Float64,Int}"
+    # Qualify via Mexicah (which imports SparseMatrixCSC): the generated MEX
+    # source only does `using Mexicah`, so `SparseArrays` is not in scope there.
+    T === SparseMatrixCSC{Float64, Int} && return "Mexicah.SparseMatrixCSC{Float64,Int}"
     T === Vector{ComplexF64} && return "Vector{ComplexF64}"
     T === String && return "String"
     error("Mexicah codegen: unsupported type $T")
