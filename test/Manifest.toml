@@ -92,9 +92,10 @@ version = "1.11.0"
 deps = ["LinearAlgebra", "SparseArrays", "TypeContracts"]
 path = ".."
 uuid = "28b42ba6-5630-446f-bcf8-82236b20fd10"
-version = "0.1.0"
+version = "0.13.1"
 
     [deps.Mexicah.extensions]
+    MexicahCUDAExt = ["CUDA", "KernelAbstractions"]
     MexicahDataFramesExt = "DataFrames"
     MexicahEnzymeExt = "Enzyme"
     MexicahForwardDiffExt = "ForwardDiff"
@@ -102,10 +103,12 @@ version = "0.1.0"
     MexicahMTKExt = "ModelingToolkit"
 
     [deps.Mexicah.weakdeps]
+    CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
     DataFrames = "a93c6f00-e57d-5684-b466-afe8fa294f38"
     Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
     ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
     JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
+    KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
     ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 
 [[deps.MozillaCACerts_jll]]
@@ -204,7 +207,7 @@ version = "1.103.6"
 deps = ["InteractiveUtils"]
 git-tree-sha1 = "b3080960b42f3ed6fa8e42bca62bd88b7fa359a7"
 repo-rev = "master"
-repo-url = "/home/el_oso/Documents/claude/TypeContracts"
+repo-url = "https://github.com/el-oso/TypeContracts.jl"
 uuid = "c7a3f1e2-84b5-4d69-9e0a-1f2b3c4d5e6f"
 version = "0.12.0"
 
