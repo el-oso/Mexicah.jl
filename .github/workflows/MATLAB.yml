@@ -37,8 +37,11 @@ jobs:
 
       - name: Install juliac app
         shell: bash
-        # Refresh the registry first — the runner's bundled General snapshot can
-        # predate JuliaC's registration ("not found in registry" otherwise).
+        # JULIA_PKG_SERVER="" forces the git General registry from GitHub. The
+        # runner's PkgServer snapshot lags and lacks JuliaC ("not found in
+        # registry" otherwise, even after an update against the server).
+        env:
+          JULIA_PKG_SERVER: ""
         run: julia -e 'using Pkg; Pkg.Registry.update(); Pkg.Apps.add("JuliaC")'
 
       - name: Add juliac to PATH (Unix)
