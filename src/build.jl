@@ -102,10 +102,13 @@ function _compile_generated_source(
     # trimmed MEX).
     args = String[juliac_bin, "--project", project, "--output-lib", tmp_lib]
     trim && push!(args, "--trim=safe")
-    bundle && append!(args, ["--bundle", output])
-    # macOS linker rejects undefined symbols by default; tell it to resolve them
-    # at load time from the MATLAB process image (same as ELF lazy binding on Linux).
-    Sys.isapple() && append!(args, ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"])
+    if bundle
+        append!(args, ["--bundle", output])
+        # Privatize the bundled libjulia symbols (Unix) so the Julia runtime does
+        # not collide with libraries already loaded in the host process — MATLAB
+        # ships its own LLVM/libuv/libstdc++, and the symbol clash crashes it.
+        Sys.iswindows() || push!(args, "--privatize")
+    end
     push!(args, generated_jl)
 
     @info "Mexicah: compiling $(func_name) with juliac…"
@@ -215,7 +218,7 @@ function _gateway_c_source(impl_name::String)::String
         const char *slash = strrchr(self, '/');
         size_t dl = slash ? (size_t)(slash - self) + 1 : 0;
         snprintf(path, sizeof(path), "%.*s%s", (int)dl, self, "$(impl_name)");
-        void *h = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
+        void *h = dlopen(path, RTLD_NOW | RTLD_LOCAL);
         if (!h) { fprintf(stderr, "Mexicah gateway: dlopen(%s): %s\\n", path, dlerror()); return; }
         g_impl = (mexfn_t)dlsym(h, "mexFunction");
         if (!g_impl) fprintf(stderr, "Mexicah gateway: mexFunction missing in %s\\n", path);
