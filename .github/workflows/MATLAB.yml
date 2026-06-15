@@ -37,7 +37,9 @@ jobs:
 
       - name: Install juliac app
         shell: bash
-        run: julia -e 'using Pkg; Pkg.Apps.add("JuliaC")'
+        # Refresh the registry first — the runner's bundled General snapshot can
+        # predate JuliaC's registration ("not found in registry" otherwise).
+        run: julia -e 'using Pkg; Pkg.Registry.update(); Pkg.Apps.add("JuliaC")'
 
       - name: Add juliac to PATH (Unix)
         if: runner.os != 'Windows'
