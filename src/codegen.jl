@@ -21,7 +21,7 @@ function generate_mex_source(
     nret = length(rettypes)
 
     load_stmts = _gen_load_stmts(argtypes)
-    call_stmt = _gen_call_stmt(func_name, nargs, rettypes)
+    call_stmt = _gen_call_stmt(mod_name, func_name, nargs, rettypes)
     store_stmts = _gen_store_stmts(rettypes)
     check_stmt = _gen_arg_check(nargs, nret)
 
@@ -72,15 +72,19 @@ function _gen_load_stmts(argtypes::Vector{Type})::String
     return join(lines, "\n")
 end
 
-function _gen_call_stmt(func_name::Symbol, nargs::Int, rettypes::Vector{Type})::String
+# Qualify the call as `Module.func` so juliac resolves it via the `import Module`
+# in the generated source. An unqualified name would resolve to the compilation
+# process's (empty) Main and fail trim verification.
+function _gen_call_stmt(mod_name::Symbol, func_name::Symbol, nargs::Int, rettypes::Vector{Type})::String
     args = join(["_arg$i" for i in 1:nargs], ", ")
+    callee = "$mod_name.$func_name"
     return if length(rettypes) == 1
-        "    _ret1 = $func_name($args)"
+        "    _ret1 = $callee($args)"
     elseif length(rettypes) > 1
         lhs = join(["_ret$i" for i in 1:length(rettypes)], ", ")
-        "    ($lhs,) = $func_name($args)"
+        "    ($lhs,) = $callee($args)"
     else
-        "    $func_name($args)"
+        "    $callee($args)"
     end
 end
 

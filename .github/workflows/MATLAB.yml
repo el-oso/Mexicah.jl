@@ -72,7 +72,8 @@ jobs:
 
       - name: Build MEX fixtures
         shell: bash
-        run: julia --project=. test/matlab/build_fixtures.jl
+        # build_fixtures.jl activates the MexFixtures package itself.
+        run: julia test/matlab/build_fixtures.jl
 
       - name: Put bundled libjulia on the loader path (Unix)
         if: runner.os != 'Windows'

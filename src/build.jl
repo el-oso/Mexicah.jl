@@ -35,6 +35,7 @@ function build_mex(
         trim::Bool = true,
         bundle::Bool = true,
         juliac_bin::String = "juliac",
+        project::String = _active_project_dir(),
     )::String
     func_name = name === nothing ? nameof(f) : name
     func_module = parentmodule(f)
@@ -53,8 +54,17 @@ function build_mex(
 
     return _compile_generated_source(
         src, func_name, output;
-        trim = trim, bundle = bundle, juliac_bin = juliac_bin,
+        trim = trim, bundle = bundle, juliac_bin = juliac_bin, project = project,
     )
+end
+
+# The project juliac should compile against must contain BOTH Mexicah and the
+# module that defines `f` (so the generated `using Mexicah` / `import <Module>`
+# both resolve). The caller's active project satisfies this — the user adds
+# Mexicah as a dependency of the package where their @mexfunction lives.
+function _active_project_dir()::String
+    p = Base.active_project()
+    return p === nothing ? pkgdir(@__MODULE__) : dirname(p)
 end
 
 """
@@ -71,6 +81,7 @@ function _compile_generated_source(
         trim::Bool = true,
         bundle::Bool = true,
         juliac_bin::String = "juliac",
+        project::String = pkgdir(@__MODULE__),
     )::String
     mkpath(output)
 
@@ -83,12 +94,13 @@ function _compile_generated_source(
     out_mex = joinpath(output, "$(func_name).$ext")
     tmp_lib = joinpath(output, "$(func_name)_tmp.so")
 
-    # Compile the generated source against Mexicah's own package environment, not
-    # the caller's. juliac runs as a separate process and would otherwise fail to
-    # resolve `using Mexicah`; pinning Mexicah's project also guarantees a clean
-    # closure (CUDA/KernelAbstractions are weak deps there, so the GPU codegen's
-    # PTX-embedding wrapper never drags a Julia GPU stack into the trimmed MEX).
-    args = String[juliac_bin, "--project", pkgdir(@__MODULE__), "--output-lib", tmp_lib]
+    # juliac runs as a separate process and resolves `using Mexicah` / the user's
+    # `import <Module>` from `project`. For the CPU build_mex path this is the
+    # caller's active project (has Mexicah + the user module); the GPU path leaves
+    # the default = Mexicah's own project (CUDA/KernelAbstractions are weak deps
+    # there, so the PTX-embedding wrapper never drags a Julia GPU stack into the
+    # trimmed MEX).
+    args = String[juliac_bin, "--project", project, "--output-lib", tmp_lib]
     trim && push!(args, "--trim=safe")
     bundle && append!(args, ["--bundle", output])
     # macOS linker rejects undefined symbols by default; tell it to resolve them
