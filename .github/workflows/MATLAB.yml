@@ -1,0 +1,80 @@
+name: MATLAB
+
+# End-to-end: build Mexicah MEX fixtures with juliac, then load and call them in
+# real MATLAB on Linux, Windows, and macOS. On public repos the matlab-actions
+# auto-license base MATLAB (no Coder/Compiler needed — calling a pre-built MEX is
+# base MATLAB), so this runs without a license token.
+#
+# GPU MEX is intentionally not exercised here: hosted runners have no NVIDIA GPU
+# or CUDA, and the GPU build needs a real device for PTX extraction.
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: matlab-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  matlab-e2e:
+    name: MATLAB e2e - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12'
+      - uses: julia-actions/cache@v2
+
+      - name: Install juliac app
+        shell: bash
+        run: julia -e 'using Pkg; Pkg.Apps.add("JuliaC")'
+
+      - name: Add juliac to PATH (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: echo "$HOME/.julia/bin" >> "$GITHUB_PATH"
+      - name: Add juliac to PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.julia\bin"
+
+      - name: Instantiate Mexicah
+        shell: bash
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Build MEX fixtures
+        shell: bash
+        run: julia --project=. test/matlab/build_fixtures.jl
+
+      - name: Put bundled libjulia on the loader path (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          MEX="${{ github.workspace }}/mex"
+          if [ "$RUNNER_OS" = "macOS" ]; then VAR=DYLD_LIBRARY_PATH; else VAR=LD_LIBRARY_PATH; fi
+          echo "$VAR=$MEX:$MEX/lib:$MEX/lib/julia" >> "$GITHUB_ENV"
+      - name: Put bundled libjulia on the loader path (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $mex = "${{ github.workspace }}\mex"
+          Add-Content -Path $env:GITHUB_ENV -Value "PATH=$mex;$mex\lib;$mex\lib\julia;$env:PATH"
+
+      - uses: matlab-actions/setup-matlab@v3
+        with:
+          release: latest
+
+      - uses: matlab-actions/run-tests@v3
+        with:
+          source-folder: mex
+          select-by-folder: test/matlab
