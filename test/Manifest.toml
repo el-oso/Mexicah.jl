@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "15b64d2f20928b80efc3528581bdd9a6a42524d8"
+project_hash = "111bdbf62532dc71163b622045c700c02eecb0a6"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -92,7 +92,7 @@ version = "1.11.0"
 deps = ["LinearAlgebra", "SparseArrays", "TypeContracts"]
 path = ".."
 uuid = "28b42ba6-5630-446f-bcf8-82236b20fd10"
-version = "0.13.1"
+version = "0.13.4"
 
     [deps.Mexicah.extensions]
     MexicahCUDAExt = ["CUDA", "KernelAbstractions"]

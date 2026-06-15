@@ -1,5 +1,6 @@
 # Test environment — run with: julia --project=test test/runtests.jl
 [deps]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Mexicah       = "28b42ba6-5630-446f-bcf8-82236b20fd10"
 ReTestItems   = "817f1d60-ba6b-4fd5-9520-3cf149f6a823"
 SparseArrays  = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
