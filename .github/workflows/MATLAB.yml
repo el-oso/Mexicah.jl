@@ -82,6 +82,13 @@ jobs:
           MEX="${{ github.workspace }}/mex"
           if [ "$RUNNER_OS" = "macOS" ]; then VAR=DYLD_LIBRARY_PATH; else VAR=LD_LIBRARY_PATH; fi
           echo "$VAR=$MEX:$MEX/lib:$MEX/lib/julia" >> "$GITHUB_ENV"
+          # MATLAB ships an older libstdc++ and forces it ahead of the system's;
+          # libjulia/LLVM needs a newer GLIBCXX. Preload the system libstdc++ so
+          # the newer one wins (documented MATLAB-MEX workaround).
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            STDCXX=$(gcc -print-file-name=libstdc++.so.6)
+            echo "LD_PRELOAD=$STDCXX" >> "$GITHUB_ENV"
+          fi
       - name: Put bundled libjulia on the loader path (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
