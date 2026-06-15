@@ -35,23 +35,36 @@ jobs:
           version: '1.12'
       - uses: julia-actions/cache@v2
 
-      - name: Install juliac app
+      # Install the JuliaC tool by repo URL into a dedicated environment. This
+      # bypasses Pkg.Apps.add (experimental in 1.12 — it could not resolve JuliaC
+      # against the runner registry) and the PkgServer snapshot entirely: the
+      # package is cloned from GitHub, its deps resolve from the registry as
+      # normal. juliac is then invoked as `julia --project=<env> -m JuliaC`.
+      - name: Install juliac (from source)
         shell: bash
-        # JULIA_PKG_SERVER="" forces the git General registry from GitHub. The
-        # runner's PkgServer snapshot lags and lacks JuliaC ("not found in
-        # registry" otherwise, even after an update against the server).
-        env:
-          JULIA_PKG_SERVER: ""
-        run: julia -e 'using Pkg; Pkg.Registry.update(); Pkg.Apps.add("JuliaC")'
+        run: |
+          julia -e 'using Pkg; Pkg.activate(joinpath(homedir(), ".juliac-env")); Pkg.add(url="https://github.com/JuliaLang/JuliaC.jl.git")'
 
-      - name: Add juliac to PATH (Unix)
+      - name: juliac shim (Unix)
         if: runner.os != 'Windows'
         shell: bash
-        run: echo "$HOME/.julia/bin" >> "$GITHUB_PATH"
-      - name: Add juliac to PATH (Windows)
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/juliac" <<EOF
+          #!/usr/bin/env bash
+          exec julia --project="$HOME/.juliac-env" --startup-file=no -m JuliaC "\$@"
+          EOF
+          chmod +x "$HOME/.local/bin/juliac"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: juliac shim (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.julia\bin"
+        run: |
+          $bin = "$env:USERPROFILE\.local\bin"
+          New-Item -ItemType Directory -Force -Path $bin | Out-Null
+          $proj = "$env:USERPROFILE\.juliac-env"
+          "@echo off`r`njulia --project=$proj --startup-file=no -m JuliaC %*" | Set-Content -Path "$bin\juliac.cmd" -Encoding ascii
+          Add-Content -Path $env:GITHUB_PATH -Value $bin
 
       - name: Instantiate Mexicah
         shell: bash
