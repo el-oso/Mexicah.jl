@@ -5,16 +5,26 @@ feasibility notes, and a code audit (2026-06-16). Ordered by priority within eac
 section; **Section 1 (correctness/robustness) should come first** — those are
 latent defects, the rest are features and polish.
 
-## Status (v0.19.0)
+## Status (v0.20.0)
 
 - End-to-end MATLAB CI is green and blocking on Linux, Windows, and macOS:
-  15 asserted fixtures in one session + sparse, per OS.
+  17 asserted fixtures in one session + sparse, per OS.
 - Full Julia test suite green; docs build clean.
 - Marshaler coverage: real-numeric scalars (`Float64/Float32`, `Int8/16/32/64`,
   `UInt8/16/32/64`), `Bool`, dense `Array{T,N}` of any supported numeric element
-  type and rank, **logical `Array{Bool,N}`**, `SparseMatrixCSC{Float64,Int}`,
-  complex vectors/matrices/N-D, flat `struct`/`NamedTuple` (in & out), `String`,
-  `UInt64` handles, and multiple outputs.
+  type and rank, logical `Array{Bool,N}`, `SparseMatrixCSC{Float64,Int}`,
+  complex `Array{ComplexF64,N}` **and `Array{ComplexF32,N}`**, flat
+  `struct`/`NamedTuple` (in & out) **and `Vector{<struct>}` ↔ N×1 struct array**,
+  `String`, `UInt64` handles, and multiple outputs.
+
+## Recently completed (v0.20.0)
+
+- **§1 coverage:** `Vector{<struct>}` ↔ N×1 MATLAB struct array; `ComplexF32`
+  arrays.
+- **§4 cleanup:** unified the type registries — `codegen._type_literal` is now a
+  recursive renderer with `marshaler_for` as the sole support gatekeeper; Linux
+  self-contained loading via a `patchelf` `$ORIGIN` RUNPATH (falls back to
+  `LD_LIBRARY_PATH` if `patchelf` is absent).
 
 ## Recently completed (v0.19.0)
 
@@ -32,11 +42,12 @@ latent defects, the rest are features and polish.
 
 ## 1. Marshaler coverage (remainders)
 
-- **`ComplexF32` arrays** (only `ComplexF64` today; needs single-precision split
-  Pr/Pi accessors).
-- **Struct *arrays*** (N×1 MATLAB struct; current struct support is scalar 1×1).
-- **Cell arrays**, **char/string arrays**.
-- **Sparse for non-`Float64`** element types.
+- **Cell arrays** (heterogeneous; e.g. `Vector{Any}`/tuple → MATLAB cell — needs a
+  design for how Julia heterogeneity maps).
+- **Char/string arrays** (`Vector{String}` → cell of char, or MATLAB `string`).
+- **Sparse for non-`Float64`** element types (logical/complex sparse).
+- **N-D / matrix struct arrays** (`Matrix{<struct>}`; today only `Vector{<struct>}`
+  → N×1).
 
 ## 2. Distribution
 
@@ -55,22 +66,12 @@ latent defects, the rest are features and polish.
 
 ## 4. Cleanup & polish
 
-- **Single source of truth for supported types.** `marshaler_for`
-  (`src/marshaling.jl`) and `_type_literal` (`src/codegen.jl`) both encode the
-  supported set; `_type_literal` now defers to `marshaler_for` as gatekeeper, but
-  the two should be unified to prevent future drift (this duplication caused the
-  "unsupported type Float32" build error during the v0.18.0 work).
 - **Dynamic dispatch in the marshaler hot path** (low priority): `marshaler_for`
   is `@nospecialize` and returns `Any`, so `load`/`store!`/`create` dispatch
   dynamically at runtime (recursively, per struct field). Fine for `ccall`-bound
   work; revisit only if profiling shows it matters.
-- **Linux self-contained loading** (low priority): the relocated impl `.so` relies
-  on `LD_LIBRARY_PATH` (set by `mexicah_setup.m` / CI) to find `libjulia`, whereas
-  macOS now uses an `@loader_path` rpath. An equivalent `patchelf --set-rpath
-  '$ORIGIN/lib:$ORIGIN/lib/julia'` would make Linux MEX self-contained too (and
-  in-process `setenv` of `LD_LIBRARY_PATH` is unreliable for end users).
 - Add `docs/src/assets/logo.png` + `favicon.ico` (the Vitepress build warns they
-  are missing).
+  are missing; needs design assets).
 
 ## 5. GPU follow-ons (deferred — needs a CUDA + MATLAB host)
 

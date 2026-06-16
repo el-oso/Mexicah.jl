@@ -210,32 +210,41 @@ end
 """
     _fix_impl_rpath(impl_path) -> nothing
 
-macOS-only: make the relocated impl library find its bundled `libjulia`.
+Make the relocated impl library find its bundled `libjulia`.
 
 `juliac --bundle` lays out `<bundle>/lib/<lib>` and `<bundle>/lib/julia/<deps>`,
-and stamps the lib with rpaths `@loader_path/../lib` and `@loader_path/../lib/julia`
-(correct *while the lib sits in `<bundle>/lib`*). We relocate the impl to
-`<bundle>/` next to the gateways, so those rpaths now point one directory too high
-(`<bundle>/../lib`). Add the corrected `@loader_path/lib[/julia]` rpaths so dyld
-resolves `@rpath/...libjulia.dylib`. On Linux `LD_LIBRARY_PATH` papers over this,
-but macOS SIP strips `DYLD_LIBRARY_PATH` from the signed MATLAB process, so the
-rpath must be right. `install_name_tool` invalidates the signature; arm64 macOS
-refuses to load an invalidly-signed dylib, so re-sign ad-hoc afterwards.
+and stamps the lib with rpaths relative to `<bundle>/lib`. We relocate the impl to
+`<bundle>/` next to the gateways, so those rpaths point one directory too high.
+
+- **macOS:** rewrite the rpaths to `@loader_path/lib[/julia]`. SIP strips
+  `DYLD_LIBRARY_PATH` from the signed MATLAB process, so the rpath *must* be right.
+  `install_name_tool` invalidates the ad-hoc signature (arm64 then refuses to
+  load), so strip + re-sign around the edit.
+- **Linux:** set an `\$ORIGIN`-relative RUNPATH via `patchelf` so the MEX is
+  self-contained. If `patchelf` is unavailable we leave juliac's rpath and fall
+  back to `LD_LIBRARY_PATH` (set by `mexicah_setup.m` / CI), as before.
 """
 function _fix_impl_rpath(impl_path::String)::Nothing
-    Sys.isapple() || return nothing
-    # Strip juliac's ad-hoc signature first: arm64 `install_name_tool` refuses to
-    # edit a signed binary. Rewrite (not add) the existing rpaths in place: the
-    # juliac dylib has no header padding, so adding load commands fails, but the
-    # corrected paths are *shorter* than the originals and fit. Then re-sign.
-    run(ignorestatus(`codesign --remove-signature $impl_path`))
-    for (old, new) in (
-            "@loader_path/../lib" => "@loader_path/lib",
-            "@loader_path/../lib/julia" => "@loader_path/lib/julia",
-        )
-        run(`install_name_tool -rpath $old $new $impl_path`)
+    if Sys.isapple()
+        # Strip juliac's ad-hoc signature first: arm64 `install_name_tool` refuses
+        # to edit a signed binary. Rewrite (not add) the existing rpaths in place:
+        # the dylib has no header padding so adding load commands fails, but the
+        # corrected paths are *shorter* than the originals and fit. Then re-sign.
+        run(ignorestatus(`codesign --remove-signature $impl_path`))
+        for (old, new) in (
+                "@loader_path/../lib" => "@loader_path/lib",
+                "@loader_path/../lib/julia" => "@loader_path/lib/julia",
+            )
+            run(`install_name_tool -rpath $old $new $impl_path`)
+        end
+        run(`codesign -s - -f $impl_path`)
+    elseif Sys.islinux()
+        patchelf = Sys.which("patchelf")
+        if patchelf !== nothing
+            rpath = "\$ORIGIN/lib:\$ORIGIN/lib/julia"   # literal $ORIGIN for ld.so
+            run(ignorestatus(`$patchelf --set-rpath $rpath $impl_path`))
+        end
     end
-    run(`codesign -s - -f $impl_path`)
     return nothing
 end
 

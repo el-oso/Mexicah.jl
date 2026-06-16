@@ -75,6 +75,24 @@ jobs:
         # build_fixtures.jl activates the MexFixtures package itself.
         run: julia test/matlab/build_fixtures.jl
 
+      # Confirm the Linux impl is self-contained: with LD_LIBRARY_PATH cleared, the
+      # bundled libjulia must resolve through the $ORIGIN RUNPATH patchelf stamped
+      # (see _fix_impl_rpath). Non-blocking — the MATLAB run below still exports
+      # LD_LIBRARY_PATH as a fallback for runners without patchelf.
+      - name: Linux self-contained loading probe (rpath, no LD_LIBRARY_PATH)
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        shell: bash
+        run: |
+          IMPL="${{ github.workspace }}/mex/mexicah_fixtures_impl.so"
+          command -v patchelf || echo "(patchelf absent — relying on LD_LIBRARY_PATH)"
+          echo "=== RUNPATH ==="; readelf -d "$IMPL" 2>/dev/null | grep -iE "rpath|runpath" || echo "(none)"
+          printf '%s\n' '#include <dlfcn.h>' '#include <stdio.h>' \
+            'int main(int c,char**v){void*h=dlopen(v[1],RTLD_NOW|RTLD_LOCAL);if(!h){printf("dlopen FAIL: %s\n",dlerror());return 2;}printf("dlopen OK %p\n",h);return 0;}' > /tmp/dl.c
+          cc /tmp/dl.c -o /tmp/dl -ldl
+          echo "=== dlopen with LD_LIBRARY_PATH cleared ==="
+          env -u LD_LIBRARY_PATH /tmp/dl "$IMPL"; echo "exit=$?"
+
       # Install MATLAB BEFORE exporting the bundled-library path. Otherwise its
       # installer (mpm) inherits LD_/DYLD_LIBRARY_PATH pointing at our bundled
       # Julia libs and loads the wrong ones (mpm crashed with 255 on macOS).
