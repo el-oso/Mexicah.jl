@@ -96,6 +96,15 @@ jobs:
           $mex = "${{ github.workspace }}\mex"
           Add-Content -Path $env:GITHUB_ENV -Value "PATH=$mex;$mex\bin;$mex\lib;$env:PATH"
 
+      - name: Disable Windows Error Reporting (crashes fail fast, no UI hang)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $k = "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting"
+          New-Item -Path $k -Force | Out-Null
+          Set-ItemProperty -Path $k -Name DontShowUI -Value 1 -Type DWord
+          Set-ItemProperty -Path $k -Name Disabled -Value 1 -Type DWord
+
       - uses: matlab-actions/setup-matlab@v3
         with:
           release: latest
@@ -123,6 +132,7 @@ jobs:
       - name: MATLAB Windows fault trace (non-blocking)
         if: runner.os == 'Windows'
         continue-on-error: true
+        timeout-minutes: 6
         uses: matlab-actions/run-command@v3
         with:
           startup-options: -logfile ${{ github.workspace }}\mlwin.log
