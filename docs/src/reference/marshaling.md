@@ -9,11 +9,16 @@
 | `Bool` | `logical` scalar | `mxGetLogicals` — **by value** | `mxCreateLogicalScalar` — **by value** |
 | `Vector{Float64}`, `Matrix{Float64}` | double vector / matrix | `unsafe_wrap(mxGetPr)` — **zero-copy** | `mxCreateDoubleMatrix` + `copyto!` |
 | `Array{T,N}` (any numeric `T`, any rank) | numeric array of class `T` | `unsafe_wrap(mxGetData)` — **zero-copy** | `mxCreateNumericMatrix`/`Array` + `copyto!` |
+| `Array{Bool,N}` | `logical` array | `mxGetLogicals` — **zero-copy** | `mxCreateLogicalArray` + `copyto!` |
 | `SparseMatrixCSC{Float64,Int}` | sparse double | `mxGetIr/Jc/Pr`; nzval zero-copy, indices copied | `mxCreateSparse` + index/value copy |
+| `SparseMatrixCSC{ComplexF64,Int}` | complex sparse double | `mxGetIr/Jc/Pr/Pi` — split real/imag | `mxCreateSparse(mxCOMPLEX)` + split copy |
+| `SparseMatrixCSC{Bool,Int}` | sparse logical | `mxGetIr/Jc` + `mxGetData` as `uint8` | `mxCreateSparseLogicalMatrix` |
 | `Array{ComplexF64,N}` (vector / matrix / N-D) | complex double | `mxGetPr`/`mxGetPi` (split real/imag) — copy | `mxCreateDoubleMatrix(mxCOMPLEX)` + split copy |
+| `Array{ComplexF32,N}` | complex single | `mxGetData`/`mxGetImagData` as `Float32` — copy | `mxCreateNumericMatrix(mxSINGLE,mxCOMPLEX)` |
 | `struct` / `NamedTuple` (flat) | 1×1 `struct` | `mxGetField` per field, recursing | `mxCreateStructMatrix` + `mxSetField` per field |
 | `Vector{<struct>}` | N×1 `struct` array | `mxGetField` per field per element | `mxCreateStructMatrix(N,1)` + `mxSetField` |
-| `Array{Bool,N}` | `logical` array | `mxGetLogicals` — **zero-copy** | `mxCreateLogicalArray` + `copyto!` |
+| `Tuple{A,B,…}` | 1×N cell array | `mxGetCell` per element, each by own marshaler | `mxCreateCellMatrix(1,N)` + `mxSetCell` |
+| `Vector{String}` | N×1 cell of `char` | `mxGetCell` + `mxGetString` per element | `mxCreateCellMatrix(N,1)` + `mxCreateString` |
 | `String` | `char` array | `mxGetString` — **copies to Julia heap** | `mxCreateString` — **one allocation** |
 
 The numeric element types are `Float64`, `Float32`, `Int8/16/32/64`, and

@@ -5,17 +5,34 @@ feasibility notes, and a code audit (2026-06-16). Ordered by priority within eac
 section; **Section 1 (correctness/robustness) should come first** — those are
 latent defects, the rest are features and polish.
 
-## Status (v0.20.0)
+## Status (v0.21.0)
 
 - End-to-end MATLAB CI is green and blocking on Linux, Windows, and macOS:
-  17 asserted fixtures in one session + sparse, per OS.
-- Full Julia test suite green; docs build clean.
+  19 asserted fixtures in one session + sparse (including complex and logical), per OS.
+- Full Julia test suite green (76 tests, 236 assertions); docs build clean.
+- `:matlab`-tagged marshaler round-trips now run in regular CI (without MATLAB) via
+  the `libmx_stub.so` preloaded on Linux runners.
 - Marshaler coverage: real-numeric scalars (`Float64/Float32`, `Int8/16/32/64`,
   `UInt8/16/32/64`), `Bool`, dense `Array{T,N}` of any supported numeric element
   type and rank, logical `Array{Bool,N}`, `SparseMatrixCSC{Float64,Int}`,
+  `SparseMatrixCSC{ComplexF64,Int}`, `SparseMatrixCSC{Bool,Int}`,
   complex `Array{ComplexF64,N}` **and `Array{ComplexF32,N}`**, flat
   `struct`/`NamedTuple` (in & out) **and `Vector{<struct>}` ↔ N×1 struct array**,
+  `Tuple{A,B,…}` ↔ 1×N cell array, `Vector{String}` ↔ N×1 cell of char,
   `String`, `UInt64` handles, and multiple outputs.
+
+## Recently completed (v0.21.0)
+
+- **§1 coverage:** `SparseMatrixCSC{ComplexF64,Int}` ↔ complex sparse double
+  (split Pr/Pi over shared Ir/Jc); `SparseMatrixCSC{Bool,Int}` ↔ sparse logical
+  (`mxCreateSparseLogicalMatrix`, values via `mxGetData` as `Cuchar`).
+- **§1 coverage:** `Tuple{A,B,…}` ↔ 1×N MATLAB cell (heterogeneous, @generated
+  element unrolling at compile time); `Vector{String}` ↔ N×1 cell of char.
+- **§3 MATLAB-less stub:** `test/matlab/libmx_stub/libmx_stub.c` — a ~400-line C
+  shared library implementing ~45 `libmx` entry points over a minimal `mx_stub_t`
+  heap struct. Preloaded with `RTLD_GLOBAL` on Linux CI runners so that all
+  `:matlab`-tagged tests (marshaler round-trips) run without a MATLAB license.
+  7 previously-skipped `:matlab` tests now run in the regular `CI.yml` workflow.
 
 ## Recently completed (v0.20.0)
 
@@ -42,16 +59,6 @@ latent defects, the rest are features and polish.
 
 ## 1. Marshaler coverage
 
-### Next up (greenlit)
-
-- **Cell arrays.** Map a Julia heterogeneous tuple `Tuple{A,B,…}` → a 1×N MATLAB
-  cell (each element marshaled by its own type), and `Vector{String}` → an N×1
-  cell of char. Use `mxCreateCellMatrix`/`mxGetCell`/`mxSetCell`; the @generated
-  approach (as for structs) unrolls tuple element types at codegen time.
-- **Sparse for non-`Float64`** element types — at least `SparseMatrixCSC{ComplexF64,Int}`
-  (split Pr/Pi over the existing sparse Ir/Jc) and logical sparse; generalize
-  `SparseFloat64Marshaler` over the value type.
-
 ### Later
 
 - **Char/string arrays** beyond the `Vector{String}`→cell case (e.g. MATLAB
@@ -70,11 +77,12 @@ latent defects, the rest are features and polish.
 
 ## 3. Testing & tooling
 
-- **MATLAB-free load/store unit harness.** Investigated and deferred: the
-  marshalers `ccall` real `libmx` entry points (`mxGetData`, `mxCreateNumericMatrix`,
-  …), so a pure-Julia mock would have to reimplement enough of `libmx` to be
-  meaningful. Data movement stays validated via the CI MATLAB fixtures; the
-  `@verify trim_compat` checks cover trim-safety without MATLAB.
+- **MATLAB-free load/store unit harness.** Implemented in v0.21.0 as
+  `test/matlab/libmx_stub/libmx_stub.c` — a C shared library (~400 lines, ~45
+  functions) built in CI before the Julia test step on Linux. Preloading with
+  `RTLD_GLOBAL` satisfies all `ccall(:mxFoo, …)` calls made by the marshalers,
+  enabling full round-trip unit tests without MATLAB. macOS/Windows use real MATLAB
+  via `MATLAB.yml`.
 
 ## 4. Cleanup & polish
 
