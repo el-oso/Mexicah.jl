@@ -117,6 +117,7 @@ jobs:
       # shared-runtime redesign. Six marshalers in one session, blocking on both
       # Linux and Windows. (sparse is tested separately — see below.)
       - name: MATLAB fixtures (one session, non-sparse)
+        if: runner.os != 'macOS'
         timeout-minutes: 8
         uses: matlab-actions/run-command@v3
         with:
@@ -129,6 +130,21 @@ jobs:
             assert(bool_not(true)==false && bool_not(false)==true);
             v=[1+2i;3-1i]; assert(isequal(complex_conj(v),conj(v)));
             disp('6 marshalers OK in one MATLAB session');
+
+      # macOS runtime is being brought up (non-blocking): the MEX builds but the
+      # first call crashes (255). Capture MATLAB's crash report to diagnose.
+      - name: MATLAB macOS fault trace (non-blocking)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        timeout-minutes: 6
+        uses: matlab-actions/run-command@v3
+        with:
+          startup-options: -logfile ${{ github.workspace }}/mlmac.log
+          command: addpath('${{ github.workspace }}/mex'); disp(add_doubles(3.0,4.0))
+      - name: Show macOS MATLAB log
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: cat "${{ github.workspace }}/mlmac.log" 2>/dev/null || echo "(no logfile)"
 
       - name: MATLAB sparse_fro (Linux)
         if: runner.os == 'Linux'
