@@ -224,10 +224,13 @@ refuses to load an invalidly-signed dylib, so re-sign ad-hoc afterwards.
 """
 function _fix_impl_rpath(impl_path::String)::Nothing
     Sys.isapple() || return nothing
+    # Strip juliac's ad-hoc signature first: arm64 `install_name_tool` refuses to
+    # edit a signed binary. Then add the rpaths and re-sign ad-hoc.
+    run(ignorestatus(`codesign --remove-signature $impl_path`))
     for rp in ("@loader_path/lib", "@loader_path/lib/julia")
-        run(ignorestatus(`install_name_tool -add_rpath $rp $impl_path`))
+        run(`install_name_tool -add_rpath $rp $impl_path`)
     end
-    run(ignorestatus(`codesign -s - -f $impl_path`))
+    run(`codesign -s - -f $impl_path`)
     return nothing
 end
 
