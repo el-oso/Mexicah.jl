@@ -124,6 +124,9 @@ mx_create_logical_scalar(v::Bool)::MxArray =
     @mxccall ccall(:mxCreateLogicalScalar, MxArray, (Cuchar,), v ? Cuchar(1) : Cuchar(0))
 mx_create_logical_array(m::Csize_t, n::Csize_t)::MxArray =
     @mxccall ccall(:mxCreateLogicalMatrix, MxArray, (Csize_t, Csize_t), m, n)
+# N-dimensional logical array. Large-array function → _730 on Windows.
+mx_create_logical_nd(ndim::Csize_t, dims::Ptr{Csize_t})::MxArray =
+    @mxccall730 ccall(:mxCreateLogicalArray, MxArray, (Csize_t, Ptr{Csize_t}), ndim, dims)
 
 # ── Numeric (generic) ─────────────────────────────────────────────────────────
 

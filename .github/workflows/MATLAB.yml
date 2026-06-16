@@ -142,7 +142,8 @@ jobs:
             [lo,hi]=minmax_vec([3.0;1.0;2.0]); assert(lo==1.0 && hi==3.0);
             lo1=minmax_vec([3.0;1.0;2.0]); assert(lo1==1.0);
             assert(stats_total(struct('mean',4.0,'n',3))==12.0);
-            disp('14 fixtures OK in one MATLAB session');
+            L=[true false; false true]; assert(isequal(logical_not_arr(L),~L));
+            disp('15 fixtures OK in one MATLAB session');
 
       # macOS: same one-session test as Linux/Windows. The impl dylib carries
       # @loader_path/lib rpaths (see _fix_impl_rpath) so it finds bundled libjulia
@@ -170,7 +171,8 @@ jobs:
             [lo,hi]=minmax_vec([3.0;1.0;2.0]); assert(lo==1.0 && hi==3.0);
             lo1=minmax_vec([3.0;1.0;2.0]); assert(lo1==1.0);
             assert(stats_total(struct('mean',4.0,'n',3))==12.0);
-            disp('14 fixtures OK in one MATLAB session');
+            L=[true false; false true]; assert(isequal(logical_not_arr(L),~L));
+            disp('15 fixtures OK in one MATLAB session');
       - name: macOS crash diagnostics
         if: always() && runner.os == 'macOS'
         shell: bash

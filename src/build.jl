@@ -259,7 +259,9 @@ function _validate_method(f, input_types::Vector{<:Type})
         )
     end
     # Check that inference produces a concrete result (not Any) to warn early.
-    rt = only(Base.return_types(f, Tuple{input_types...}))
+    # (`first`, not `only`: a signature can match >1 method, where `only` throws.)
+    rts = Base.return_types(f, Tuple{input_types...})
+    rt = isempty(rts) ? Any : first(rts)
     return if rt === Any || rt === Union{}
         @warn "Mexicah: return type inferred as $rt for $(nameof(f)). " *
             "juliac --trim=safe may fail. Add explicit return type annotations."
@@ -390,20 +392,17 @@ function _write_setup_m(output_dir::String, func_name::Symbol)::Cvoid
 
     bundle_dir = '$(abs_dir)';
     % juliac --bundle places libjulia and the Julia runtime libraries under
-    % lib/ and lib/julia/; the MEX needs all three on the library search path.
-    lib_dirs = {bundle_dir, fullfile(bundle_dir, 'lib'), fullfile(bundle_dir, 'lib', 'julia')};
-    prefix = strjoin(lib_dirs, ':');
-    if ismac
-        var = 'DYLD_LIBRARY_PATH';
-    else
-        var = 'LD_LIBRARY_PATH';
-    end
-    if isunix || ismac
-        cur = getenv(var);
+    % lib/ and lib/julia/. On macOS the implementation library finds them via its
+    % @loader_path/lib rpaths (and SIP strips DYLD_LIBRARY_PATH anyway), so only
+    % addpath is needed. On Linux the loader path still helps locate libjulia.
+    if isunix && ~ismac
+        lib_dirs = {bundle_dir, fullfile(bundle_dir, 'lib'), fullfile(bundle_dir, 'lib', 'julia')};
+        prefix = strjoin(lib_dirs, ':');
+        cur = getenv('LD_LIBRARY_PATH');
         if isempty(cur)
-            setenv(var, prefix);
+            setenv('LD_LIBRARY_PATH', prefix);
         elseif ~contains(cur, lib_dirs{2})
-            setenv(var, [prefix ':' cur]);
+            setenv('LD_LIBRARY_PATH', [prefix ':' cur]);
         end
     end
     addpath(bundle_dir);

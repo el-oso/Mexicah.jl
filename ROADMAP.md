@@ -5,86 +5,74 @@ feasibility notes, and a code audit (2026-06-16). Ordered by priority within eac
 section; **Section 1 (correctness/robustness) should come first** — those are
 latent defects, the rest are features and polish.
 
-## Status (v0.18.0)
+## Status (v0.19.0)
 
 - End-to-end MATLAB CI is green and blocking on Linux, Windows, and macOS:
-  12 marshalers in one session + sparse, per OS.
-- Full Julia test suite green (64 test items); docs build clean.
+  15 asserted fixtures in one session + sparse, per OS.
+- Full Julia test suite green; docs build clean.
 - Marshaler coverage: real-numeric scalars (`Float64/Float32`, `Int8/16/32/64`,
   `UInt8/16/32/64`), `Bool`, dense `Array{T,N}` of any supported numeric element
-  type and rank, `SparseMatrixCSC{Float64,Int}`, complex vectors/matrices/N-D,
-  flat `struct`/`NamedTuple`, `String`, and `UInt64` handles.
+  type and rank, **logical `Array{Bool,N}`**, `SparseMatrixCSC{Float64,Int}`,
+  complex vectors/matrices/N-D, flat `struct`/`NamedTuple` (in & out), `String`,
+  `UInt64` handles, and multiple outputs.
 
-## 1. Correctness & robustness (audit findings — do first)
+## Recently completed (v0.19.0)
 
-- **Trap Julia exceptions in the generated `mexFunction`.** `_gen_ccallable`
-  (`src/codegen.jl`) emits no `try`/`catch`, so *any* Julia error (a bad input
-  value, a user-function throw, an unsupported marshaler) propagates as
-  `fatal: error thrown and no exception handler available` and **aborts the whole
-  MATLAB process**. Wrap the body and convert to `mex_errorf` (`mexErrMsgIdAndTxt`)
-  so MATLAB raises a normal, catchable error instead of crashing. Highest-value
-  fix.
-- **Respect `nlhs` when storing outputs.** `_gen_store_stmts` (`src/codegen.jl`)
-  writes **all** `nret` outputs unconditionally, but MATLAB allocates only
-  `max(nlhs,1)` `plhs` slots. Calling a multi-output function with fewer outputs
-  (e.g. `U = la_svd(A)` on the 3-output SVD) writes past `plhs` → undefined
-  behaviour / crash. Store only the first `max(nlhs,1)` results.
-- **Validate array rank on load.** `_load_dims` (`src/marshaling.jl`) does
-  `unsafe_load(dptr, i)` for `i in 1:N`; if MATLAB passes an array of lower rank
-  than the declared `Array{T,N}`, it reads past `mxGetDimensions`. Check
-  `mx_get_number_of_dimensions` and `mex_errorf` on mismatch.
-- **Gateway load failure is silent.** `_gateway_c_source` (`src/build.jl`): if
-  `dlopen`/`LoadLibrary` fails, `g_impl` stays null and `mexFunction` returns
-  having set no output — MATLAB sees no error, only a (often invisible) `stderr`
-  line. At minimum document this; ideally surface a clearer failure.
+- **§1 correctness — all four audit defects fixed:** exceptions are trapped in the
+  generated `mexFunction` (→ `mex_errorf`, no more process abort); outputs are
+  stored only up to `max(nlhs,1)` (no past-`plhs` write for multi-output calls);
+  `_load_dims` errors on rank mismatch instead of reading past `mxGetDimensions`;
+  the gateway raises a MATLAB error on impl load failure.
+- **§2:** logical (`Bool`) arrays.
+- **§4:** multi-output + struct-input MATLAB fixtures (would have caught the
+  `nlhs` defect).
+- **§5:** removed dead `to_mx`; `mexicah_setup.m` no longer sets the stale
+  macOS `DYLD_LIBRARY_PATH`; `_validate_method` uses `first`, not `only`.
+- **§3:** added the missing `[compat]` bounds (`LinearAlgebra`, `ModelingToolkit`).
 
-## 2. Marshaler coverage (remainders)
+## 1. Marshaler coverage (remainders)
 
-- **Logical (`Bool`) arrays** — scalar `Bool` works, but `Array{Bool,N}` is not
-  routed (`_mx_class_for` has no `Bool`, and the array branch excludes it). Either
-  support logical arrays or document the asymmetry.
-- **`ComplexF32` arrays** (only `ComplexF64` today).
-- **Struct *arrays*** (N×1 MATLAB struct) and **struct *inputs*** exercised in the
-  MATLAB e2e (current struct support is scalar 1×1 and only output-tested).
+- **`ComplexF32` arrays** (only `ComplexF64` today; needs single-precision split
+  Pr/Pi accessors).
+- **Struct *arrays*** (N×1 MATLAB struct; current struct support is scalar 1×1).
 - **Cell arrays**, **char/string arrays**.
 - **Sparse for non-`Float64`** element types.
 
-## 3. Distribution
+## 2. Distribution
 
-- **Register in the General registry.** Blocked: `TypeContracts` is a Git/path
-  dependency and must be registered first. This is the gate to `]add Mexicah`.
+- **Register in the General registry.** Blocked: `TypeContracts` is a Git
+  dependency (`[sources]` in `Project.toml`), which the General registry forbids —
+  `TypeContracts` must be registered first and the `[sources]` entry removed.
+  `[compat]` bounds are now in place.
 
-## 4. Testing & tooling
+## 3. Testing & tooling
 
-- **MATLAB-free load/store unit harness** (a mock `mxArray`). The `nlhs` and
-  error-trapping defects above slipped through precisely because data movement is
-  only validated in CI MATLAB / via fixtures, never in plain `julia` tests.
-- **Multi-output and struct-input fixtures** in `.github/workflows/MATLAB.yml`
-  (would have caught the `nlhs` bug; current fixtures are single-output + a struct
-  *output*).
+- **MATLAB-free load/store unit harness.** Investigated and deferred: the
+  marshalers `ccall` real `libmx` entry points (`mxGetData`, `mxCreateNumericMatrix`,
+  …), so a pure-Julia mock would have to reimplement enough of `libmx` to be
+  meaningful. Data movement stays validated via the CI MATLAB fixtures; the
+  `@verify trim_compat` checks cover trim-safety without MATLAB.
 
-## 5. Cleanup & polish
+## 4. Cleanup & polish
 
-- Remove dead `Float64Marshaler.to_mx` (`src/marshaling.jl`), defined for one type
-  and used nowhere.
 - **Single source of truth for supported types.** `marshaler_for`
   (`src/marshaling.jl`) and `_type_literal` (`src/codegen.jl`) both encode the
   supported set; `_type_literal` now defers to `marshaler_for` as gatekeeper, but
   the two should be unified to prevent future drift (this duplication caused the
   "unsupported type Float32" build error during the v0.18.0 work).
-- `mexicah_setup.m` still sets `DYLD_LIBRARY_PATH` on macOS (`_write_setup_m`,
-  `src/build.jl`); SIP strips it and the impl now resolves `libjulia` via rpath —
-  the branch is stale.
 - **Dynamic dispatch in the marshaler hot path** (low priority): `marshaler_for`
   is `@nospecialize` and returns `Any`, so `load`/`store!`/`create` dispatch
   dynamically at runtime (recursively, per struct field). Fine for `ccall`-bound
   work; revisit only if profiling shows it matters.
-- `_validate_method` uses `only(Base.return_types(...))`, which throws a confusing
-  `only` error for functions with 0 or >1 methods; handle explicitly.
+- **Linux self-contained loading** (low priority): the relocated impl `.so` relies
+  on `LD_LIBRARY_PATH` (set by `mexicah_setup.m` / CI) to find `libjulia`, whereas
+  macOS now uses an `@loader_path` rpath. An equivalent `patchelf --set-rpath
+  '$ORIGIN/lib:$ORIGIN/lib/julia'` would make Linux MEX self-contained too (and
+  in-process `setenv` of `LD_LIBRARY_PATH` is unreliable for end users).
 - Add `docs/src/assets/logo.png` + `favicon.ico` (the Vitepress build warns they
   are missing).
 
-## 6. GPU follow-ons (deferred — needs a CUDA + MATLAB host)
+## 5. GPU follow-ons (deferred — needs a CUDA + MATLAB host)
 
 Scheduled last: unlike everything above, this work cannot be developed or
 validated on the current machine or on hosted CI. It needs a single host with

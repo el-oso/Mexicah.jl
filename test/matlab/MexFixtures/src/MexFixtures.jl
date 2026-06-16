@@ -92,6 +92,11 @@ function stats_total(s::Stats)::Float64
     return s.mean * Float64(s.n)
 end
 
+# Matrix{Bool} — logical array (LogicalArrayMarshaler)
+function logical_not_arr(A::Matrix{Bool})::Matrix{Bool}
+    return .!A
+end
+
 # (function, input types, output types), in build order. The first entry bundles
 # the Julia runtime; the rest reuse it (see build_fixtures.jl).
 const FIXTURES = [
@@ -110,6 +115,7 @@ const FIXTURES = [
     (make_stats, Type[Vector{Float64}], Type[Stats]),
     (minmax_vec, Type[Vector{Float64}], Type[Float64, Float64]),
     (stats_total, Type[Stats], Type[Float64]),
+    (logical_not_arr, Type[Matrix{Bool}], Type[Matrix{Bool}]),
 ]
 
 end # module MexFixtures

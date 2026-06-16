@@ -97,5 +97,10 @@ classdef tMexicahFixtures < matlab.unittest.TestCase
             verifyEqual(tc, stats_total(struct('mean', 4.0, 'n', 3)), 12.0, ...
                 'AbsTol', 1e-12);
         end
+
+        function tLogicalNotArr(tc)         % Matrix{Bool} (logical array)
+            L = [true false; false true];
+            verifyEqual(tc, logical_not_arr(L), ~L);
+        end
     end
 end

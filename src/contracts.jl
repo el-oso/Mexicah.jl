@@ -40,6 +40,7 @@ end
 @verify DenseArrayMarshaler{Int32, 1} trim_compat = true
 @verify DenseArrayMarshaler{Float32, 3} trim_compat = true
 @verify ComplexArrayMarshaler{2} trim_compat = true
+@verify LogicalArrayMarshaler{2} trim_compat = true
 # Struct marshaler — verified on a concrete fixture struct (its load/store/create
 # are @generated, so this instantiates and scans the generated code).
 @verify StructMarshaler{_StructProbe} trim_compat = true

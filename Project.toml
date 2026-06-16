@@ -1,6 +1,6 @@
 name = "Mexicah"
 uuid = "28b42ba6-5630-446f-bcf8-82236b20fd10"
-version = "0.18.0"
+version = "0.19.0"
 authors = ["el-oso <el-oso@users.noreply.github.com>"]
 
 [apps]
@@ -33,6 +33,7 @@ MexicahMTKExt              = "ModelingToolkit"
 
 [compat]
 julia              = "1.12"
+LinearAlgebra      = "1"
 SparseArrays       = "1"
 TypeContracts      = "0.12"
 CUDA               = "5"
@@ -41,3 +42,4 @@ Enzyme             = "0.13"
 ForwardDiff        = "0.10"
 JuMP               = "1"
 KernelAbstractions = "0.9"
+ModelingToolkit    = "9, 10"

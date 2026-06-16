@@ -52,6 +52,16 @@ end
     @test Mexicah.mx_class_id(Mexicah.DenseArrayMarshaler{Int16, 2}()) == Mexicah.mxINT16_CLASS
 end
 
+@testitem "marshaler_for: logical (Bool) arrays" begin
+    using Mexicah, Test
+    @test Mexicah.marshaler_for(Vector{Bool}) isa Mexicah.LogicalArrayMarshaler{1}
+    @test Mexicah.marshaler_for(Matrix{Bool}) isa Mexicah.LogicalArrayMarshaler{2}
+    @test Mexicah.marshaler_for(Array{Bool, 3}) isa Mexicah.LogicalArrayMarshaler{3}
+    # Bool scalar keeps its dedicated marshaler
+    @test Mexicah.marshaler_for(Bool) isa Mexicah.BoolMarshaler
+    @test Mexicah.mx_class_id(Mexicah.LogicalArrayMarshaler{2}()) == Mexicah.mxLOGICAL_CLASS
+end
+
 @testitem "marshaler_for: complex matrices / N-D" begin
     using Mexicah, Test
     @test Mexicah.marshaler_for(Matrix{ComplexF64}) isa Mexicah.ComplexArrayMarshaler{2}

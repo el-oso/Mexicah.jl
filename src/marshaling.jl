@@ -30,10 +30,6 @@ create(::Float64Marshaler, ::Tuple)::MxArray = mx_create_double_scalar(Cdouble(0
 
 mx_class_id(::Float64Marshaler)::Cint = mxDOUBLE_CLASS
 
-function to_mx(::Float64Marshaler, v::Float64)::MxArray
-    return mx_create_double_scalar(Cdouble(v))
-end
-
 # ── Vector{Float64} ───────────────────────────────────────────────────────────
 
 struct VectorFloat64Marshaler end
@@ -396,6 +392,40 @@ end
 
 mx_class_id(::ComplexArrayMarshaler)::Cint = mxDOUBLE_CLASS
 
+# ── Logical (Bool) arrays, any rank ───────────────────────────────────────────
+# MATLAB logical storage is one byte per element (0/1), matching Julia `Bool`, so
+# load is zero-copy. (Bool *scalars* keep `BoolMarshaler`; numeric `Array{T,N}`
+# can't carry Bool because mxCreateNumericMatrix rejects the logical class.)
+
+struct LogicalArrayMarshaler{N} end
+
+function load(::LogicalArrayMarshaler{N}, pa::MxArray)::Array{Bool, N} where {N}
+    ptr = Ptr{Bool}(mx_get_logicals(pa))
+    return unsafe_wrap(Array, ptr, _load_dims(pa, Val(N)); own = false)
+end
+
+function store!(::LogicalArrayMarshaler{N}, pa::MxArray, v::Any)::Cvoid where {N}
+    arr = v::Array{Bool, N}
+    ptr = Ptr{Bool}(mx_get_logicals(pa))
+    GC.@preserve arr unsafe_copyto!(ptr, pointer(arr), length(arr))
+    return
+end
+
+function create(::LogicalArrayMarshaler{N}, dims::Tuple)::MxArray where {N}
+    if N == 1
+        return mx_create_logical_array(Csize_t(dims[1]::Int), Csize_t(1))
+    elseif N == 2
+        return mx_create_logical_array(Csize_t(dims[1]::Int), Csize_t(dims[2]::Int))
+    else
+        d = Csize_t[Csize_t(x) for x in dims]
+        GC.@preserve d begin
+            return mx_create_logical_nd(Csize_t(N), pointer(d))
+        end
+    end
+end
+
+mx_class_id(::LogicalArrayMarshaler)::Cint = mxLOGICAL_CLASS
+
 # ── Struct / NamedTuple ↔ MATLAB 1×1 struct ───────────────────────────────────
 # A flat Julia struct (or NamedTuple) maps to a scalar MATLAB struct, one field
 # per Julia field. The load/store!/create methods are @generated so the field
@@ -479,6 +509,7 @@ function marshaler_for(@nospecialize(T::Type))
     if T <: Array
         ET = eltype(T)
         ND = ndims(T)
+        ET === Bool && return LogicalArrayMarshaler{ND}()
         ET === ComplexF64 && return ComplexArrayMarshaler{ND}()
         if ET === Float64 || ET === Float32 ||
                 ET === Int8 || ET === Int16 || ET === Int32 || ET === Int64 ||
