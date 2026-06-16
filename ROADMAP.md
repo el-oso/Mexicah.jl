@@ -49,23 +49,12 @@ latent defects, the rest are features and polish.
 - **Cell arrays**, **char/string arrays**.
 - **Sparse for non-`Float64`** element types.
 
-## 3. GPU follow-ons
-
-The CUDA MVP is the narrowest surface (`docs/src/examples/cuda.md`); the CPU-side
-Float32/N-D work in v0.18.0 makes the generalization tractable.
-
-- **Multiple outputs** (currently exactly one).
-- **Float32 / integer element types** (currently `Float64`-only).
-- **2-D `Matrix` kernels** (currently 1-D `Vector{Float64}`, `@index(Global)`).
-- Infrastructure: self-hosted GPU CI (hosted runners have no NVIDIA GPU);
-  AMDGPU/Metal/oneAPI are blocked upstream by missing runtime kernel loaders.
-
-## 4. Distribution
+## 3. Distribution
 
 - **Register in the General registry.** Blocked: `TypeContracts` is a Git/path
   dependency and must be registered first. This is the gate to `]add Mexicah`.
 
-## 5. Testing & tooling
+## 4. Testing & tooling
 
 - **MATLAB-free load/store unit harness** (a mock `mxArray`). The `nlhs` and
   error-trapping defects above slipped through precisely because data movement is
@@ -74,7 +63,7 @@ Float32/N-D work in v0.18.0 makes the generalization tractable.
   (would have caught the `nlhs` bug; current fixtures are single-output + a struct
   *output*).
 
-## 6. Cleanup & polish
+## 5. Cleanup & polish
 
 - Remove dead `Float64Marshaler.to_mx` (`src/marshaling.jl`), defined for one type
   and used nowhere.
@@ -94,3 +83,21 @@ Float32/N-D work in v0.18.0 makes the generalization tractable.
   `only` error for functions with 0 or >1 methods; handle explicitly.
 - Add `docs/src/assets/logo.png` + `favicon.ico` (the Vitepress build warns they
   are missing).
+
+## 6. GPU follow-ons (deferred — needs a CUDA + MATLAB host)
+
+Scheduled last: unlike everything above, this work cannot be developed or
+validated on the current machine or on hosted CI. It needs a single host with
+**both** an NVIDIA GPU/CUDA (to extract PTX and run the kernel) **and** MATLAB (to
+exercise the MEX end to end), which will take time to provision. Hosted runners
+have neither together. Until that host exists, treat this section as blocked.
+
+The CUDA MVP is the narrowest surface (`docs/src/examples/cuda.md`); the CPU-side
+Float32/N-D work in v0.18.0 makes the generalization tractable once a host is
+available.
+
+- **Multiple outputs** (currently exactly one).
+- **Float32 / integer element types** (currently `Float64`-only).
+- **2-D `Matrix` kernels** (currently 1-D `Vector{Float64}`, `@index(Global)`).
+- Infrastructure: self-hosted GPU CI (hosted runners have no NVIDIA GPU);
+  AMDGPU/Metal/oneAPI are blocked upstream by missing runtime kernel loaders.
