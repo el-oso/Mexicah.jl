@@ -141,10 +141,24 @@ jobs:
         with:
           startup-options: -logfile ${{ github.workspace }}/mlmac.log
           command: addpath('${{ github.workspace }}/mex'); disp(add_doubles(3.0,4.0))
-      - name: Show macOS MATLAB log
+      - name: macOS crash diagnostics
         if: always() && runner.os == 'macOS'
         shell: bash
-        run: cat "${{ github.workspace }}/mlmac.log" 2>/dev/null || echo "(no logfile)"
+        run: |
+          set +e
+          MEX="${{ github.workspace }}/mex"
+          IMPL="$MEX/mexicah_fixtures_impl.dylib"
+          echo "=== mlmac.log ==="; cat "$MEX/../mlmac.log" 2>/dev/null || cat "${{ github.workspace }}/mlmac.log" 2>/dev/null || echo "(none)"
+          echo "=== mex layout ==="; ls -la "$MEX"; echo "--- lib ---"; ls -la "$MEX/lib" 2>/dev/null | head
+          echo "=== impl: linked libraries (otool -L) ==="; otool -L "$IMPL" 2>&1 | head -20
+          echo "=== impl: rpaths (otool -l) ==="; otool -l "$IMPL" 2>&1 | grep -A2 LC_RPATH
+          echo "=== impl: code signature ==="; codesign -dv "$IMPL" 2>&1 | head
+          echo "=== gateway otool -L ==="; otool -L "$MEX/add_doubles.mexmaca64" 2>&1 | head
+          echo "=== MATLAB crash reports ==="
+          for f in ~/Library/Logs/DiagnosticReports/MATLAB* /Users/runner/Library/Logs/DiagnosticReports/*; do
+            [ -f "$f" ] && { echo "----- $f -----"; sed -n '1,50p' "$f"; }
+          done 2>/dev/null
+          echo "(end diagnostics)"
 
       - name: MATLAB sparse_fro (Linux)
         if: runner.os == 'Linux'
