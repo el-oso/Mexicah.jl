@@ -227,6 +227,20 @@ function mx_create_struct_matrix(m::Csize_t, n::Csize_t, fieldnames::Vector{Stri
     end
 end
 
+# ── Cell arrays ───────────────────────────────────────────────────────────────
+# mxGetCell / mxSetCell take a linear (0-based) mwIndex. The creation function
+# takes mwSize m and n. Both are in the 64-bit large-array family → @mxccall730.
+
+mx_create_cell_matrix(m::Csize_t, n::Csize_t)::MxArray =
+    @mxccall730 ccall(:mxCreateCellMatrix, MxArray, (Csize_t, Csize_t), m, n)
+mx_get_cell(pa::MxArray, index::Csize_t)::MxArray =
+    @mxccall730 ccall(:mxGetCell, MxArray, (MxArray, Csize_t), pa, index)
+function mx_set_cell!(pa::MxArray, index::Csize_t, value::MxArray)::Cvoid
+    @mxccall730 ccall(:mxSetCell, Cvoid, (MxArray, Csize_t, MxArray), pa, index, value)
+    return
+end
+mx_is_cell(pa::MxArray)::Bool = (@mxccall ccall(:mxIsCell, Cint, (MxArray,), pa)) != 0
+
 # ── Char arrays (strings) ─────────────────────────────────────────────────────
 
 function mx_get_string(pa::MxArray)::String

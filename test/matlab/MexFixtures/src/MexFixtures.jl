@@ -121,6 +121,16 @@ function logical_sparse_identity(A::SparseMatrixCSC{Bool, Int})::SparseMatrixCSC
     return A
 end
 
+# Tuple{Float64, Int64} → 1×2 MATLAB cell (CellArrayMarshaler output)
+function tuple_passthrough(x::Float64, n::Int64)::Tuple{Float64, Int64}
+    return (x, n)
+end
+
+# Vector{String} → N×1 MATLAB cell of char (StringVectorMarshaler both ways)
+function strs_upper(v::Vector{String})::Vector{String}
+    return map(uppercase, v)
+end
+
 # (function, input types, output types), in build order. The first entry bundles
 # the Julia runtime; the rest reuse it (see build_fixtures.jl).
 const FIXTURES = [
@@ -144,6 +154,8 @@ const FIXTURES = [
     (cf32_conj, Type[Vector{ComplexF32}], Type[Vector{ComplexF32}]),
     (sparse_complex_fro, Type[SparseMatrixCSC{ComplexF64, Int}], Type[Float64]),
     (logical_sparse_identity, Type[SparseMatrixCSC{Bool, Int}], Type[SparseMatrixCSC{Bool, Int}]),
+    (tuple_passthrough, Type[Float64, Int64], Type[Tuple{Float64, Int64}]),
+    (strs_upper, Type[Vector{String}], Type[Vector{String}]),
 ]
 
 end # module MexFixtures

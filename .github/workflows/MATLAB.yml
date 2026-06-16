@@ -135,9 +135,10 @@ jobs:
 
       # All fixtures share ONE juliac library (one Julia runtime), so they can be
       # called together in a single MATLAB session — the real test of the
-      # shared-runtime redesign. 14 fixtures in one session (Float64/Float32, int
-      # widths, Bool, Float32 matrix, 3-D array, complex vector/matrix, struct in &
-      # out, multi-output), blocking. (sparse is tested separately — see below.)
+      # shared-runtime redesign. 19 non-sparse fixtures in one session (Float64/Float32,
+      # int widths, Bool, Float32 matrix, 3-D array, complex vector/matrix, struct in &
+      # out, multi-output, cell array, string vector), blocking.
+      # (sparse is tested separately — see below.)
       - name: MATLAB fixtures (one session, non-sparse)
         if: runner.os != 'macOS'
         timeout-minutes: 8
@@ -164,7 +165,9 @@ jobs:
             sa=struct('mean',{2.0,3.0},'n',{1,2}); o=scale_stats(sa,10.0);
             assert(numel(o)==2 && o(1).mean==20.0 && o(2).mean==30.0 && o(1).n==1 && o(2).n==2);
             vf=single([1+2i;3-1i]); assert(isequal(cf32_conj(vf),conj(vf)) && isa(cf32_conj(vf),'single'));
-            disp('17 fixtures OK in one MATLAB session');
+            c=tuple_passthrough(3.0,int64(7)); assert(c{1}==3.0 && isequal(c{2},int64(7)));
+            assert(isequal(strs_upper({'hello','world'}),{'HELLO','WORLD'}));
+            disp('19 fixtures OK in one MATLAB session');
 
       # macOS: same one-session test as Linux/Windows. The impl dylib carries
       # @loader_path/lib rpaths (see _fix_impl_rpath) so it finds bundled libjulia
@@ -196,7 +199,9 @@ jobs:
             sa=struct('mean',{2.0,3.0},'n',{1,2}); o=scale_stats(sa,10.0);
             assert(numel(o)==2 && o(1).mean==20.0 && o(2).mean==30.0 && o(1).n==1 && o(2).n==2);
             vf=single([1+2i;3-1i]); assert(isequal(cf32_conj(vf),conj(vf)) && isa(cf32_conj(vf),'single'));
-            disp('17 fixtures OK in one MATLAB session');
+            c=tuple_passthrough(3.0,int64(7)); assert(c{1}==3.0 && isequal(c{2},int64(7)));
+            assert(isequal(strs_upper({'hello','world'}),{'HELLO','WORLD'}));
+            disp('19 fixtures OK in one MATLAB session');
       - name: macOS crash diagnostics
         if: always() && runner.os == 'macOS'
         shell: bash

@@ -111,9 +111,11 @@ end
     @test Mexicah._type_literal(TestStructMod.Pt) == "TestStructMod.Pt"
     # ... including as an array element type (so the generated `import` resolves it)
     @test Mexicah._type_literal(Vector{TestStructMod.Pt}) == "Array{TestStructMod.Pt, 1}"
+    # Vector{String} and Tuple now render correctly (not errors)
+    @test Mexicah._type_literal(Vector{String}) == "Array{String, 1}"
+    @test Mexicah._type_literal(Tuple{Float64, Int64}) == "Tuple{Float64, Int64}"
     # unsupported element types still error
     @test_throws ErrorException Mexicah._type_literal(ComplexF64)   # complex scalar
-    @test_throws ErrorException Mexicah._type_literal(Vector{String})
 end
 
 @testitem "generate_mex_source supports String input and output" begin

@@ -690,6 +690,84 @@ end
 
 mx_class_id(::StructVectorMarshaler)::Cint = mxSTRUCT_CLASS
 
+# ── Tuple{A,B,…} ↔ MATLAB 1×N cell array ────────────────────────────────────
+# A heterogeneous Julia tuple maps to a 1×N MATLAB cell, each element marshaled
+# by its own type. The @generated body unrolls element types at codegen time
+# (fieldtype/fieldcount reflection happens during code generation) — required
+# for juliac --trim=safe. The same @generated pattern as StructMarshaler applies.
+
+struct CellArrayMarshaler{T} end
+
+@generated function load(::CellArrayMarshaler{T}, pa::MxArray)::T where {T}
+    loads = [
+        :(load(marshaler_for($(fieldtype(T, i))), mx_get_cell(pa, Csize_t($(i - 1)))))
+            for i in 1:fieldcount(T)
+    ]
+    return :(($(loads...),))
+end
+
+@generated function store!(::CellArrayMarshaler{T}, pa::MxArray, v::Any)::Cvoid where {T}
+    stmts = Any[:(tup = v::$T)]
+    for i in 1:fieldcount(T)
+        FT = fieldtype(T, i)
+        push!(
+            stmts,
+            quote
+                let fm = marshaler_for($FT), fv = getfield(tup, $i)
+                    fdims = fv isa AbstractArray ? size(fv) : ()
+                    fpa = create(fm, fdims)
+                    store!(fm, fpa, fv)
+                    mx_set_cell!(pa, Csize_t($(i - 1)), fpa)
+                end
+            end,
+        )
+    end
+    push!(stmts, :(return nothing))
+    return Expr(:block, stmts...)
+end
+
+@generated function create(::CellArrayMarshaler{T}, ::Tuple)::MxArray where {T}
+    N = fieldcount(T)   # known at compile time; the dims arg is ignored
+    return :(mx_create_cell_matrix(Csize_t(1), Csize_t($N)))
+end
+
+mx_class_id(::CellArrayMarshaler)::Cint = mxCELL_CLASS
+
+# A concrete probe so the @verify in contracts.jl can instantiate the @generated methods.
+const _CellProbe = Tuple{Float64, Int64}
+
+# ── Vector{String} ↔ MATLAB N×1 cell of char ─────────────────────────────────
+# Each Julia String maps to a 1×N char mxArray (mxCreateString); the enclosing
+# cell is an N×1 mxCELL array. This is the natural MATLAB representation of a
+# string vector: strsplit / string arrays in MATLAB code produce cell arrays of
+# char when passed to older MEX, so this is the compatible representation.
+
+struct StringVectorMarshaler end
+
+function load(::StringVectorMarshaler, pa::MxArray)::Vector{String}
+    n = Int(mx_get_number_of_elements(pa))
+    out = Vector{String}(undef, n)
+    for i in 1:n
+        out[i] = mx_get_string(mx_get_cell(pa, Csize_t(i - 1)))
+    end
+    return out
+end
+
+function store!(::StringVectorMarshaler, pa::MxArray, v::Any)::Cvoid
+    vec = v::Vector{String}
+    for i in eachindex(vec)
+        mx_set_cell!(pa, Csize_t(i - 1), mx_create_string(vec[i]))
+    end
+    return
+end
+
+function create(::StringVectorMarshaler, dims::Tuple)::MxArray
+    n = dims[1]::Int
+    return mx_create_cell_matrix(Csize_t(n), Csize_t(1))
+end
+
+mx_class_id(::StringVectorMarshaler)::Cint = mxCELL_CLASS
+
 # ── Dispatch: pick a marshaler for a Julia type ───────────────────────────────
 
 function marshaler_for(@nospecialize(T::Type))
@@ -724,8 +802,11 @@ function marshaler_for(@nospecialize(T::Type))
                 ET === UInt8 || ET === UInt16 || ET === UInt32 || ET === UInt64
             return DenseArrayMarshaler{ET, ND}()
         end
+        ET === String && ND == 1 && return StringVectorMarshaler()
         ND == 1 && _is_user_struct(ET) && return StructVectorMarshaler{ET}()
     end
+    # A heterogeneous Julia Tuple → 1×N MATLAB cell array.
+    T <: Tuple && fieldcount(T) >= 1 && return CellArrayMarshaler{T}()
     # A flat struct / NamedTuple → 1×1 MATLAB struct.
     _is_user_struct(T) && return StructMarshaler{T}()
     error(

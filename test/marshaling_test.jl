@@ -84,6 +84,18 @@ end
     @test Mexicah.mx_class_id(Mexicah.ComplexF32ArrayMarshaler{2}()) == Mexicah.mxSINGLE_CLASS
 end
 
+@testitem "marshaler_for: cell arrays and string vectors" begin
+    using Mexicah, Test
+    @test Mexicah.marshaler_for(Tuple{Float64, Int64}) isa
+        Mexicah.CellArrayMarshaler{Tuple{Float64, Int64}}
+    @test Mexicah.marshaler_for(Tuple{Float64, String}) isa
+        Mexicah.CellArrayMarshaler{Tuple{Float64, String}}
+    @test Mexicah.marshaler_for(Vector{String}) isa Mexicah.StringVectorMarshaler
+    @test Mexicah.mx_class_id(Mexicah.CellArrayMarshaler{Tuple{Float64, Int64}}()) ==
+        Mexicah.mxCELL_CLASS
+    @test Mexicah.mx_class_id(Mexicah.StringVectorMarshaler()) == Mexicah.mxCELL_CLASS
+end
+
 @testitem "marshaler_for: structs and NamedTuples" begin
     using Mexicah, Test
     struct Pt
@@ -97,9 +109,9 @@ end
     # Vector of structs → N×1 MATLAB struct array
     @test Mexicah.marshaler_for(Vector{Pt}) isa Mexicah.StructVectorMarshaler{Pt}
     @test Mexicah.mx_class_id(Mexicah.StructVectorMarshaler{Pt}()) == Mexicah.mxSTRUCT_CLASS
-    # Not struct-marshaled: Complex scalar (a Number) and Tuple are excluded
+    # Not struct-marshaled: Complex scalar (a Number) is excluded;
+    # Tuple now routes to CellArrayMarshaler (no longer an error here).
     @test_throws ErrorException Mexicah.marshaler_for(ComplexF64)
-    @test_throws ErrorException Mexicah.marshaler_for(Tuple{Float64, Int64})
 end
 
 # ── Tests requiring MATLAB API symbols in the process ─────────────────────────

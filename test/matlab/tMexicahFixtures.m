@@ -128,5 +128,16 @@ classdef tMexicahFixtures < matlab.unittest.TestCase
             A = sparse(logical([1 0; 0 1]));
             verifyEqual(tc, logical_sparse_identity(A), A);
         end
+
+        function tTuplePassthrough(tc)      % Tuple{Float64,Int64} → 1×2 cell
+            c = tuple_passthrough(3.0, int64(7));
+            verifyEqual(tc, c{1}, 3.0);
+            verifyEqual(tc, c{2}, int64(7));
+        end
+
+        function tStrsUpper(tc)             % Vector{String} → N×1 cell of char
+            r = strs_upper({'hello', 'world'});
+            verifyEqual(tc, r, {'HELLO', 'WORLD'});
+        end
     end
 end

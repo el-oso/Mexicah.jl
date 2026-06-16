@@ -176,6 +176,11 @@ function _render_type(T::Type)::String
     if T <: Array
         return "Array{$(_render_type(eltype(T))), $(ndims(T))}"
     end
+    # Tuple → MATLAB cell; render each element type recursively.
+    if T <: Tuple
+        elems = join((_render_type(fieldtype(T, i)) for i in 1:fieldcount(T)), ", ")
+        return "Tuple{$elems}"
+    end
     # A user struct → module-qualified. NamedTuple is a Base type → printed form.
     if isstructtype(T) && !(T <: Number) && !(T <: Tuple) &&
             !(T <: NamedTuple) && !(T <: AbstractString)

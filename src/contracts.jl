@@ -48,6 +48,9 @@ end
 # are @generated, so this instantiates and scans the generated code).
 @verify StructMarshaler{_StructProbe} trim_compat = true
 @verify StructVectorMarshaler{_StructProbe} trim_compat = true
+# Cell array marshaler — @generated over the element types, same trim-safe pattern.
+@verify CellArrayMarshaler{_CellProbe} trim_compat = true
+@verify StringVectorMarshaler trim_compat = true
 
 # TypeContracts._registry is a mutable Dict that is NOT preserved when a package
 # is loaded from a precompile cache (dict mutations to external modules are not
