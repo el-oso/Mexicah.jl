@@ -33,10 +33,19 @@ features:
 ---
 ```
 
-::: info Mexicah · *meh-SHEE-kah*
-Named after the **Mexica** of central Mexico. The name spells out
-**M**atrix-Laboratory **EX**ecutable **I**nterop: **C**ompiled, **A**OT, **H**ost-free.
-:::
+```@raw html
+<div style="text-align:center; max-width:780px; margin:2.5rem auto 1rem;">
+  <div style="font-size:1.7rem; font-weight:700; line-height:1.3;">
+    Mexicah&nbsp;·&nbsp;<span style="font-style:italic; color:var(--vp-c-brand-1);">meh-SHEE-kah</span>
+  </div>
+  <div style="font-size:1.2rem; line-height:1.55; margin-top:.6rem; color:var(--vp-c-text-2);">
+    Named after the <strong>Mexica</strong> of central Mexico — the name spells out
+    <strong>M</strong>atrix-Laboratory <strong>EX</strong>ecutable
+    <strong>I</strong>nterop: <strong>C</strong>ompiled, <strong>A</strong>OT,
+    <strong>H</strong>ost-free.
+  </div>
+</div>
+```
 
 ## What is Mexicah.jl?
 
