@@ -111,5 +111,12 @@ classdef tMexicahFixtures < matlab.unittest.TestCase
             verifyEqual(tc, o(2).mean, 30.0, 'AbsTol', 1e-12);
             verifyEqual(tc, double(o(1).n), 1.0);
         end
+
+        function tCf32Conj(tc)              % Vector{ComplexF32} (single complex)
+            v = single([1+2i; 3-1i]);
+            r = cf32_conj(v);
+            verifyEqual(tc, r, conj(v), 'AbsTol', 1e-6);
+            verifyClass(tc, r, 'single');
+        end
     end
 end

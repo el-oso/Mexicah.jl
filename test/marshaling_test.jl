@@ -69,6 +69,10 @@ end
     # Vector{ComplexF64} keeps its dedicated marshaler
     @test Mexicah.marshaler_for(Vector{ComplexF64}) isa Mexicah.ComplexFloat64Marshaler
     @test Mexicah.mx_class_id(Mexicah.ComplexArrayMarshaler{2}()) == Mexicah.mxDOUBLE_CLASS
+    # ComplexF32 arrays (single-precision complex)
+    @test Mexicah.marshaler_for(Vector{ComplexF32}) isa Mexicah.ComplexF32ArrayMarshaler{1}
+    @test Mexicah.marshaler_for(Matrix{ComplexF32}) isa Mexicah.ComplexF32ArrayMarshaler{2}
+    @test Mexicah.mx_class_id(Mexicah.ComplexF32ArrayMarshaler{2}()) == Mexicah.mxSINGLE_CLASS
 end
 
 @testitem "marshaler_for: structs and NamedTuples" begin

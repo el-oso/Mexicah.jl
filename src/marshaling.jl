@@ -392,6 +392,51 @@ end
 
 mx_class_id(::ComplexArrayMarshaler)::Cint = mxDOUBLE_CLASS
 
+# ── Single-precision complex arrays (ComplexF32), any rank ────────────────────
+# Same split real/imag scheme, but the real/imag buffers are Float32 — reached
+# via mxGetData / mxGetImagData (the class-agnostic accessors) rather than the
+# double-typed mxGetPr/mxGetPi.
+
+struct ComplexF32ArrayMarshaler{N} end
+
+function load(::ComplexF32ArrayMarshaler{N}, pa::MxArray)::Array{ComplexF32, N} where {N}
+    dims = _load_dims(pa, Val(N))
+    pr = Ptr{Float32}(mx_get_data(pa))
+    pim = Ptr{Float32}(mx_get_imag_data(pa))
+    out = Array{ComplexF32, N}(undef, dims)
+    @inbounds for k in 1:length(out)
+        im = pim == C_NULL ? 0.0f0 : unsafe_load(pim, k)
+        out[k] = complex(unsafe_load(pr, k), im)
+    end
+    return out
+end
+
+function store!(::ComplexF32ArrayMarshaler{N}, pa::MxArray, v::Any)::Cvoid where {N}
+    arr = v::Array{ComplexF32, N}
+    pr = Ptr{Float32}(mx_get_data(pa))
+    pim = Ptr{Float32}(mx_get_imag_data(pa))
+    @inbounds for k in eachindex(arr)
+        unsafe_store!(pr, real(arr[k]), k)
+        unsafe_store!(pim, imag(arr[k]), k)
+    end
+    return
+end
+
+function create(::ComplexF32ArrayMarshaler{N}, dims::Tuple)::MxArray where {N}
+    if N == 1
+        return mx_create_numeric_matrix(Csize_t(dims[1]::Int), Csize_t(1), mxSINGLE_CLASS, mxCOMPLEX)
+    elseif N == 2
+        return mx_create_numeric_matrix(Csize_t(dims[1]::Int), Csize_t(dims[2]::Int), mxSINGLE_CLASS, mxCOMPLEX)
+    else
+        d = Csize_t[Csize_t(x) for x in dims]
+        GC.@preserve d begin
+            return mx_create_numeric_array(Csize_t(N), pointer(d), mxSINGLE_CLASS, mxCOMPLEX)
+        end
+    end
+end
+
+mx_class_id(::ComplexF32ArrayMarshaler)::Cint = mxSINGLE_CLASS
+
 # ── Logical (Bool) arrays, any rank ───────────────────────────────────────────
 # MATLAB logical storage is one byte per element (0/1), matching Julia `Bool`, so
 # load is zero-copy. (Bool *scalars* keep `BoolMarshaler`; numeric `Array{T,N}`
@@ -572,6 +617,7 @@ function marshaler_for(@nospecialize(T::Type))
         ND = ndims(T)
         ET === Bool && return LogicalArrayMarshaler{ND}()
         ET === ComplexF64 && return ComplexArrayMarshaler{ND}()
+        ET === ComplexF32 && return ComplexF32ArrayMarshaler{ND}()
         if ET === Float64 || ET === Float32 ||
                 ET === Int8 || ET === Int16 || ET === Int32 || ET === Int64 ||
                 ET === UInt8 || ET === UInt16 || ET === UInt32 || ET === UInt64

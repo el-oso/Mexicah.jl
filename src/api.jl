@@ -105,6 +105,10 @@ mx_get_pi(pa::MxArray)::Ptr{Cdouble} =
     @mxccall ccall(:mxGetPi, Ptr{Cdouble}, (MxArray,), pa)
 mx_get_scalar(pa::MxArray)::Cdouble =
     @mxccall ccall(:mxGetScalar, Cdouble, (MxArray,), pa)
+# Real/imag data for any numeric class (separate-complex storage). For double,
+# these equal mxGetPr/mxGetPi; for single complex, cast to Ptr{Cfloat}.
+mx_get_imag_data(pa::MxArray)::Ptr{Cvoid} =
+    @mxccall ccall(:mxGetImagData, Ptr{Cvoid}, (MxArray,), pa)
 
 mx_create_double_matrix(m::Csize_t, n::Csize_t, flag::Cint)::MxArray =
     @mxccall ccall(:mxCreateDoubleMatrix, MxArray, (Csize_t, Csize_t, Cint), m, n, flag)

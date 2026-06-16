@@ -102,6 +102,11 @@ function scale_stats(xs::Vector{Stats}, k::Float64)::Vector{Stats}
     return [Stats(s.mean * k, s.n) for s in xs]
 end
 
+# Vector{ComplexF32} — single-precision complex (ComplexF32ArrayMarshaler)
+function cf32_conj(v::Vector{ComplexF32})::Vector{ComplexF32}
+    return conj(v)
+end
+
 # (function, input types, output types), in build order. The first entry bundles
 # the Julia runtime; the rest reuse it (see build_fixtures.jl).
 const FIXTURES = [
@@ -122,6 +127,7 @@ const FIXTURES = [
     (stats_total, Type[Stats], Type[Float64]),
     (logical_not_arr, Type[Matrix{Bool}], Type[Matrix{Bool}]),
     (scale_stats, Type[Vector{Stats}, Float64], Type[Vector{Stats}]),
+    (cf32_conj, Type[Vector{ComplexF32}], Type[Vector{ComplexF32}]),
 ]
 
 end # module MexFixtures
