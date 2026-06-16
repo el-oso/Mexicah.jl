@@ -170,6 +170,8 @@ end
 function _render_type(T::Type)::String
     # SparseArrays is not `using`-ed in the generated source; reach it via Mexicah.
     T === SparseMatrixCSC{Float64, Int} && return "Mexicah.SparseMatrixCSC{Float64,Int}"
+    T === SparseMatrixCSC{ComplexF64, Int} && return "Mexicah.SparseMatrixCSC{ComplexF64,Int}"
+    T === SparseMatrixCSC{Bool, Int} && return "Mexicah.SparseMatrixCSC{Bool,Int}"
     T === String && return "String"
     if T <: Array
         return "Array{$(_render_type(eltype(T))), $(ndims(T))}"

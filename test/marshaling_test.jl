@@ -10,6 +10,15 @@
     @test Mexicah.marshaler_for(SparseMatrixCSC{Float64, Int}) isa Mexicah.SparseFloat64Marshaler
 end
 
+@testitem "marshaler_for: non-Float64 sparse" begin
+    using Mexicah, Test, SparseArrays
+    @test Mexicah.marshaler_for(SparseMatrixCSC{ComplexF64, Int}) isa
+        Mexicah.SparseComplexF64Marshaler
+    @test Mexicah.marshaler_for(SparseMatrixCSC{Bool, Int}) isa Mexicah.SparseLogicalMarshaler
+    @test Mexicah.mx_class_id(Mexicah.SparseComplexF64Marshaler()) == Mexicah.mxDOUBLE_CLASS
+    @test Mexicah.mx_class_id(Mexicah.SparseLogicalMarshaler()) == Mexicah.mxLOGICAL_CLASS
+end
+
 @testitem "marshaler_for errors on unsupported type" begin
     using Mexicah, Test
     @test_throws ErrorException Mexicah.marshaler_for(Complex{Int32})

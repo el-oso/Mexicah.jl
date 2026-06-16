@@ -181,6 +181,105 @@ end
 
 mx_class_id(::SparseFloat64Marshaler)::Cint = mxDOUBLE_CLASS
 
+# ── SparseMatrixCSC{ComplexF64, Int} ─────────────────────────────────────────
+
+struct SparseComplexF64Marshaler end
+
+function load(::SparseComplexF64Marshaler, pa::MxArray)::SparseMatrixCSC{ComplexF64, Int}
+    m = Int(mx_get_m(pa))
+    n = Int(mx_get_n(pa))
+    nzmax = Int(mx_get_nzmax(pa))
+    ir_ptr = mx_get_ir(pa)
+    jc_ptr = mx_get_jc(pa)
+    pr_ptr = mx_get_pr(pa)
+    pi_ptr = mx_get_pi(pa)
+    ir_raw = unsafe_wrap(Array, ir_ptr, nzmax; own = false)
+    jc_raw = unsafe_wrap(Array, jc_ptr, n + 1; own = false)
+    pr = unsafe_wrap(Array, pr_ptr, nzmax; own = false)
+    pim = pi_ptr == C_NULL ? zeros(Float64, nzmax) : unsafe_wrap(Array, pi_ptr, nzmax; own = false)
+    rowval = Int.(ir_raw) .+ 1
+    colptr = Int.(jc_raw) .+ 1
+    nzval = complex.(pr, pim)
+    return SparseMatrixCSC{ComplexF64, Int}(m, n, colptr, rowval, copy(nzval))
+end
+
+function store!(::SparseComplexF64Marshaler, pa::MxArray, v::Any)::Cvoid
+    s = v::SparseMatrixCSC{ComplexF64}
+    nz = nnz(s)
+    ir_ptr = mx_get_ir(pa)
+    jc_ptr = mx_get_jc(pa)
+    pr_ptr = mx_get_pr(pa)
+    pi_ptr = mx_get_pi(pa)
+    GC.@preserve s begin
+        for i in 1:nz
+            unsafe_store!(ir_ptr, Csize_t(s.rowval[i] - 1), i)
+        end
+        for j in eachindex(s.colptr)
+            unsafe_store!(jc_ptr, Csize_t(s.colptr[j] - 1), j)
+        end
+        for i in 1:nz
+            unsafe_store!(pr_ptr, real(s.nzval[i]), i)
+            unsafe_store!(pi_ptr, imag(s.nzval[i]), i)
+        end
+    end
+    return
+end
+
+function create(::SparseComplexF64Marshaler, dims::Tuple)::MxArray
+    m = dims[1]::Int
+    n = dims[2]::Int
+    return mx_create_sparse(Csize_t(m), Csize_t(n), Csize_t(0), mxCOMPLEX)
+end
+
+mx_class_id(::SparseComplexF64Marshaler)::Cint = mxDOUBLE_CLASS
+
+# ── SparseMatrixCSC{Bool, Int} ────────────────────────────────────────────────
+
+struct SparseLogicalMarshaler end
+
+function load(::SparseLogicalMarshaler, pa::MxArray)::SparseMatrixCSC{Bool, Int}
+    m = Int(mx_get_m(pa))
+    n = Int(mx_get_n(pa))
+    nzmax = Int(mx_get_nzmax(pa))
+    ir_ptr = mx_get_ir(pa)
+    jc_ptr = mx_get_jc(pa)
+    data_ptr = Ptr{Cuchar}(mx_get_data(pa))
+    ir_raw = unsafe_wrap(Array, ir_ptr, nzmax; own = false)
+    jc_raw = unsafe_wrap(Array, jc_ptr, n + 1; own = false)
+    rowval = Int.(ir_raw) .+ 1
+    colptr = Int.(jc_raw) .+ 1
+    nzval = [unsafe_load(data_ptr, i) != 0x00 for i in 1:nzmax]
+    return SparseMatrixCSC{Bool, Int}(m, n, colptr, rowval, nzval)
+end
+
+function store!(::SparseLogicalMarshaler, pa::MxArray, v::Any)::Cvoid
+    s = v::SparseMatrixCSC{Bool}
+    nz = nnz(s)
+    ir_ptr = mx_get_ir(pa)
+    jc_ptr = mx_get_jc(pa)
+    data_ptr = Ptr{Cuchar}(mx_get_data(pa))
+    GC.@preserve s begin
+        for i in 1:nz
+            unsafe_store!(ir_ptr, Csize_t(s.rowval[i] - 1), i)
+        end
+        for j in eachindex(s.colptr)
+            unsafe_store!(jc_ptr, Csize_t(s.colptr[j] - 1), j)
+        end
+        for i in 1:nz
+            unsafe_store!(data_ptr, s.nzval[i] ? Cuchar(1) : Cuchar(0), i)
+        end
+    end
+    return
+end
+
+function create(::SparseLogicalMarshaler, dims::Tuple)::MxArray
+    m = dims[1]::Int
+    n = dims[2]::Int
+    return mx_create_sparse_logical(Csize_t(m), Csize_t(n), Csize_t(0))
+end
+
+mx_class_id(::SparseLogicalMarshaler)::Cint = mxLOGICAL_CLASS
+
 # ── Complex{Float64} (interleaved, R2018a+) ───────────────────────────────────
 
 struct ComplexFloat64Marshaler end
@@ -602,6 +701,8 @@ function marshaler_for(@nospecialize(T::Type))
     T === UInt64 && return UInt64Marshaler()
     T === Bool && return BoolMarshaler()
     T === SparseMatrixCSC{Float64, Int} && return SparseFloat64Marshaler()
+    T === SparseMatrixCSC{ComplexF64, Int} && return SparseComplexF64Marshaler()
+    T === SparseMatrixCSC{Bool, Int} && return SparseLogicalMarshaler()
     T === Vector{ComplexF64} && return ComplexFloat64Marshaler()
     T === String && return StringMarshaler()
     # Additional real numeric scalars
@@ -630,9 +731,11 @@ function marshaler_for(@nospecialize(T::Type))
     error(
         "Mexicah: no marshaler for type $T. Supported: real numeric scalars " *
             "(Float64/Float32, Int8/16/32/64, UInt8/16/32/64), Bool, dense numeric " *
-            "arrays Array{T,N} of those element types, SparseMatrixCSC{Float64,Int}, " *
+            "arrays Array{T,N} of those element types, " *
+            "SparseMatrixCSC{Float64/ComplexF64/Bool,Int}, " *
             "complex arrays Array{ComplexF64,N}, flat struct/NamedTuple and " *
-            "Vector of such structs, and String.",
+            "Vector of such structs, Tuple{...} (→ cell array), " *
+            "Vector{String} (→ cell of char), and String.",
     )
 end
 

@@ -107,6 +107,20 @@ function cf32_conj(v::Vector{ComplexF32})::Vector{ComplexF32}
     return conj(v)
 end
 
+# SparseMatrixCSC{ComplexF64, Int} — complex sparse Frobenius norm
+function sparse_complex_fro(A::SparseMatrixCSC{ComplexF64, Int})::Float64
+    acc = 0.0
+    for v in nonzeros(A)
+        acc += abs2(v)
+    end
+    return sqrt(acc)
+end
+
+# SparseMatrixCSC{Bool, Int} — logical sparse identity (tests both load and store)
+function logical_sparse_identity(A::SparseMatrixCSC{Bool, Int})::SparseMatrixCSC{Bool, Int}
+    return A
+end
+
 # (function, input types, output types), in build order. The first entry bundles
 # the Julia runtime; the rest reuse it (see build_fixtures.jl).
 const FIXTURES = [
@@ -128,6 +142,8 @@ const FIXTURES = [
     (logical_not_arr, Type[Matrix{Bool}], Type[Matrix{Bool}]),
     (scale_stats, Type[Vector{Stats}, Float64], Type[Vector{Stats}]),
     (cf32_conj, Type[Vector{ComplexF32}], Type[Vector{ComplexF32}]),
+    (sparse_complex_fro, Type[SparseMatrixCSC{ComplexF64, Int}], Type[Float64]),
+    (logical_sparse_identity, Type[SparseMatrixCSC{Bool, Int}], Type[SparseMatrixCSC{Bool, Int}]),
 ]
 
 end # module MexFixtures

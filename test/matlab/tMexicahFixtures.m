@@ -118,5 +118,15 @@ classdef tMexicahFixtures < matlab.unittest.TestCase
             verifyEqual(tc, r, conj(v), 'AbsTol', 1e-6);
             verifyClass(tc, r, 'single');
         end
+
+        function tSparseComplexFro(tc)      % SparseMatrixCSC{ComplexF64,Int}
+            A = sparse([1+1i, 0; 0, 2i]);
+            verifyEqual(tc, sparse_complex_fro(A), sqrt(1 + 1 + 4), 'AbsTol', 1e-12);
+        end
+
+        function tLogicalSparseIdentity(tc) % SparseMatrixCSC{Bool,Int}
+            A = sparse(logical([1 0; 0 1]));
+            verifyEqual(tc, logical_sparse_identity(A), A);
+        end
     end
 end

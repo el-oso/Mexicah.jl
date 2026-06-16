@@ -245,3 +245,13 @@ jobs:
         uses: matlab-actions/run-command@v3
         with:
           command: addpath('${{ github.workspace }}/mex'); assert(abs(sparse_fro(sparse([1 0;0 2]))-sqrt(5))<1e-12); disp('sparse_fro OK')
+      - name: MATLAB sparse_complex_fro
+        timeout-minutes: 8
+        uses: matlab-actions/run-command@v3
+        with:
+          command: addpath('${{ github.workspace }}/mex'); A=sparse([1+1i,0;0,2i]); assert(abs(sparse_complex_fro(A)-sqrt(6))<1e-12); disp('sparse_complex_fro OK')
+      - name: MATLAB logical_sparse_identity
+        timeout-minutes: 8
+        uses: matlab-actions/run-command@v3
+        with:
+          command: addpath('${{ github.workspace }}/mex'); A=sparse(logical([1 0;0 1])); assert(isequal(logical_sparse_identity(A),A)); disp('logical_sparse_identity OK')

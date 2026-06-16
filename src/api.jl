@@ -163,6 +163,8 @@ mx_get_data(pa::MxArray)::Ptr{Cvoid} =
 
 mx_create_sparse(m::Csize_t, n::Csize_t, nzmax::Csize_t, flag::Cint)::MxArray =
     @mxccall730 ccall(:mxCreateSparse, MxArray, (Csize_t, Csize_t, Csize_t, Cint), m, n, nzmax, flag)
+mx_create_sparse_logical(m::Csize_t, n::Csize_t, nzmax::Csize_t)::MxArray =
+    @mxccall730 ccall(:mxCreateSparseLogicalMatrix, MxArray, (Csize_t, Csize_t, Csize_t), m, n, nzmax)
 mx_get_nzmax(pa::MxArray)::Csize_t = @mxccall730 ccall(:mxGetNzmax, Csize_t, (MxArray,), pa)
 mx_get_ir(pa::MxArray)::Ptr{Csize_t} =
     @mxccall730 ccall(:mxGetIr, Ptr{Csize_t}, (MxArray,), pa)
