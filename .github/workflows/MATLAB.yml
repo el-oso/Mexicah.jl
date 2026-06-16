@@ -156,6 +156,20 @@ jobs:
           set +e
           MEX="${{ github.workspace }}/mex"
           IMPL="$MEX/mexicah_fixtures_impl.dylib"
+          echo "=== dlopen probe (isolate load vs run) ==="
+          cat > /tmp/dltest.c <<'EOF'
+          #include <dlfcn.h>
+          #include <stdio.h>
+          int main(int argc, char **argv) {
+              void *h = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
+              if (!h) { printf("dlopen FAIL: %s\n", dlerror()); return 2; }
+              printf("dlopen OK: %p\n", h);
+              void *s = dlsym(h, "mexFunction_add_doubles");
+              printf("dlsym mexFunction_add_doubles: %p\n", s);
+              return 0;
+          }
+          EOF
+          cc /tmp/dltest.c -o /tmp/dltest && /tmp/dltest "$IMPL"; echo "dltest exit=$?"
           echo "=== mlmac.log ==="; cat "$MEX/../mlmac.log" 2>/dev/null || cat "${{ github.workspace }}/mlmac.log" 2>/dev/null || echo "(none)"
           echo "=== mex layout ==="; ls -la "$MEX"; echo "--- lib ---"; ls -la "$MEX/lib" 2>/dev/null | head
           echo "=== impl: linked libraries (otool -L) ==="; otool -L "$IMPL" 2>&1 | head -20
@@ -163,9 +177,11 @@ jobs:
           echo "=== impl: code signature ==="; codesign -dv "$IMPL" 2>&1 | head
           echo "=== gateway otool -L ==="; otool -L "$MEX/add_doubles.mexmaca64" 2>&1 | head
           echo "=== MATLAB crash reports ==="
-          for f in ~/Library/Logs/DiagnosticReports/MATLAB* /Users/runner/Library/Logs/DiagnosticReports/*; do
-            [ -f "$f" ] && { echo "----- $f -----"; sed -n '1,50p' "$f"; }
+          for f in ~/Library/Logs/DiagnosticReports/* /Library/Logs/DiagnosticReports/* /Users/runner/Library/Logs/DiagnosticReports/*; do
+            [ -f "$f" ] && { echo "----- $f -----"; sed -n '1,60p' "$f"; }
           done 2>/dev/null
+          echo "=== recent crashes via log show ==="
+          log show --last 10m --predicate 'eventMessage CONTAINS "MATLAB" OR senderImagePath CONTAINS "mexicah"' 2>/dev/null | grep -iE "crash|signal|abort|fault|mexicah" | head -20
           echo "(end diagnostics)"
 
       - name: MATLAB sparse_fro (Linux)
