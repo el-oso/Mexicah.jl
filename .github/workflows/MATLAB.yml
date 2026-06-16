@@ -118,17 +118,19 @@ jobs:
             v=[1+2i;3-1i]; assert(isequal(complex_conj(v),conj(v)));
             disp('all 7 marshalers OK in one MATLAB session');
 
-      # Windows runtime is being brought up (non-blocking). Same six marshalers,
-      # one session.
-      - name: MATLAB all fixtures (Windows, non-blocking)
+      # Windows runtime is being brought up (non-blocking). Capture MATLAB's
+      # crash report to a logfile so the fault is diagnosable.
+      - name: MATLAB Windows fault trace (non-blocking)
         if: runner.os == 'Windows'
         continue-on-error: true
         uses: matlab-actions/run-command@v3
         with:
-          command: |
-            addpath('${{ github.workspace }}/mex');
-            assert(add_doubles(3.0,4.0)==7.0);
-            assert(isequal(matrix_scale([1 2;3 4],2.0),[2 4;6 8]));
-            assert(int64_double(int64(21))==int64(42));
-            assert(bool_not(true)==false);
-            disp('Windows: marshalers OK');
+          startup-options: -logfile ${{ github.workspace }}\mlwin.log
+          command: addpath('${{ github.workspace }}/mex'); disp(add_doubles(3.0,4.0))
+      - name: Show Windows MATLAB log
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path "${{ github.workspace }}\mlwin.log") {
+            Get-Content "${{ github.workspace }}\mlwin.log"
+          } else { "(no logfile written)" }
