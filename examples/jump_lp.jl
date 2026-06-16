@@ -1,5 +1,12 @@
 # Example: stateless LP solve via JuMP + HiGHS, called from MATLAB.
 #
+# ⚠️  ILLUSTRATIVE — not part of the lean, CI-built example set. JuMP + a solver
+# are large and may not compile under juliac `--trim=safe`. For a real build,
+# define the wrapper in a package (like examples/src/MexicahExamples.jl), depend
+# on the solver directly (not via Main), and build from an environment with JuMP
+# and the solver. The lean, verified examples are scalar_add / matrix_scale /
+# sparse_norm / linalg / handle_solver.
+#
 # Requires JuMP and HiGHS to be installed:
 #   julia --project=. -e 'using Pkg; Pkg.add(["JuMP", "HiGHS"])'
 #

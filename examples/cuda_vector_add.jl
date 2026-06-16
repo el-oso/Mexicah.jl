@@ -1,10 +1,11 @@
 # Example: a GPU vector-add MEX built from a KernelAbstractions @kernel.
 #
 # Build (on a machine with an NVIDIA GPU, CUDA.jl, and KernelAbstractions.jl).
-# Use the bundled examples environment — CUDA/KernelAbstractions are *weak* deps
-# of Mexicah, so they are not loadable from the package's own project:
-#   julia --project=examples -e 'using Pkg; Pkg.instantiate()'   # once
-#   julia --project=examples examples/cuda_vector_add.jl
+# Use the dedicated GPU environment — CUDA/KernelAbstractions are *weak* deps of
+# Mexicah, so they are not loadable from the package's own project, and they are
+# kept out of the lean CPU-example project (examples/Project.toml):
+#   julia --project=examples/gpu -e 'using Pkg; Pkg.instantiate()'   # once
+#   julia --project=examples/gpu examples/cuda_vector_add.jl
 #
 # This compiles the kernel to PTX, embeds it in a juliac --trim=safe MEX, and
 # writes mex/cuda_vector_add.<ext>. The resulting binary needs only the NVIDIA

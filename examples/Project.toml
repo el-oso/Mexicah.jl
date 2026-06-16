@@ -1,16 +1,26 @@
-# Build environment for the GPU example(s).
+name = "MexicahExamples"
+uuid = "c40d7918-9a74-4488-b055-cd2f6643ec36"
+version = "0.1.0"
+
+# A loadable package of example @mexfunction-style functions. It must be a real
+# on-disk package (name + uuid + src/MexicahExamples.jl) so juliac — a separate
+# process — can `import MexicahExamples` and resolve each callee when compiling a
+# MEX. Functions defined in a script's `Main` cannot be compiled (codegen emits
+# `import Main`), which is why every example builds through this package.
 #
-# CUDA and KernelAbstractions are *weak* dependencies of Mexicah (they trigger
-# MexicahCUDAExt and are never compiled into a MEX). To BUILD a GPU MEX you need
-# them loadable, which a package's own project cannot do for its weakdeps — hence
-# this dedicated environment. Instantiate once, then:
-#   julia --project=examples examples/cuda_vector_add.jl
+# Build any example with this project active:
+#   julia --project=examples examples/scalar_add.jl
+#
+# Kept lean on purpose: CUDA/KernelAbstractions are NOT here, so a CPU example
+# bundles only the Julia runtime (juliac bundles every artifact in the active
+# project — including CUDA would add ~800 MiB to a scalar-add MEX). The GPU
+# example has its own environment in examples/gpu/.
 [deps]
-CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Mexicah = "28b42ba6-5630-446f-bcf8-82236b20fd10"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 TypeContracts = "c7a3f1e2-84b5-4d69-9e0a-1f2b3c4d5e6f"
 
 [sources]
 Mexicah = {path = ".."}
-TypeContracts = {url = "/home/el_oso/Documents/claude/TypeContracts", rev = "master"}
+TypeContracts = {url = "https://github.com/el-oso/TypeContracts.jl", rev = "master"}

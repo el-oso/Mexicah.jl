@@ -1,5 +1,12 @@
 # Example: DataFrames handle lifecycle — load a CSV in Julia, query columns in MATLAB.
 #
+# ⚠️  ILLUSTRATIVE — not part of the lean, CI-built example set. DataFrames + CSV
+# are large and may not compile under juliac `--trim=safe`. For a real build,
+# define the wrappers in a package (like examples/src/MexicahExamples.jl), depend
+# on DataFrames/CSV directly (not via Main), and build from an environment that
+# has them. The lean, verified examples are scalar_add / matrix_scale /
+# sparse_norm / linalg / handle_solver.
+#
 # Requires DataFrames (and optionally CSV) to be installed:
 #   julia --project=. -e 'using Pkg; Pkg.add(["DataFrames", "CSV"])'
 #

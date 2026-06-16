@@ -1,16 +1,18 @@
 # Example: scale every element of a matrix by a scalar (zero-copy input).
 #
-# Build:
-#   julia --project=. examples/matrix_scale.jl
+# The function lives in the MexicahExamples package (examples/src/) so juliac can
+# import and compile it — functions defined in a script's Main cannot be built.
+#
+# Build (from the repo root):
+#   julia --project=examples examples/matrix_scale.jl
 #
 # MATLAB:
 #   run('mex/mexicah_setup.m')
 #   B = matrix_scale(rand(4,4), 2.5)
 
-using Mexicah
+using Mexicah, MexicahExamples
 
-@mexfunction function matrix_scale(A::Matrix{Float64}, s::Float64)::Matrix{Float64}
-    A .* s
-end
-
-build_mex(matrix_scale; output="mex/")
+build_shared_mex(
+    [(MexicahExamples.matrix_scale, Type[Matrix{Float64}, Float64], Type[Matrix{Float64}])];
+    output = "mex/",
+)
