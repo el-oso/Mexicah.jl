@@ -111,13 +111,19 @@ function _run_juliac(
     # by name — route through `cmd /c` so PATHEXT resolution finds it.
     run(Sys.iswindows() ? Cmd(vcat(["cmd", "/c"], args)) : Cmd(args))
 
-    # With `--bundle`, juliac (≥0.3) nests the output library under `<output>/lib/`
-    # alongside the bundled libjulia; without it the lib lands flat in `<output>/`.
-    bundled_lib = joinpath(output, "lib", "$(lib_base)_tmp.$(_impl_ext())")
-    produced_lib = isfile(bundled_lib) ? bundled_lib : tmp_lib
-    isfile(produced_lib) ||
-        error("Mexicah: juliac did not produce a library at $(tmp_lib) or $(bundled_lib).")
-    return produced_lib
+    # With `--bundle`, juliac (≥0.3) nests the output library next to the bundled
+    # libjulia: under `<output>/lib/` on Unix, `<output>/bin/` on Windows. Without
+    # it the lib lands flat in `<output>/`.
+    libname = "$(lib_base)_tmp.$(_impl_ext())"
+    candidates = [
+        joinpath(output, "lib", libname),
+        joinpath(output, "bin", libname),
+        tmp_lib,
+    ]
+    idx = findfirst(isfile, candidates)
+    idx === nothing &&
+        error("Mexicah: juliac did not produce a library; looked in: $(join(candidates, ", ")).")
+    return candidates[idx]
 end
 
 """

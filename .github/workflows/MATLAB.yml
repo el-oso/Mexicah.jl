@@ -94,7 +94,7 @@ jobs:
         shell: pwsh
         run: |
           $mex = "${{ github.workspace }}\mex"
-          Add-Content -Path $env:GITHUB_ENV -Value "PATH=$mex;$mex\lib;$mex\lib\julia;$env:PATH"
+          Add-Content -Path $env:GITHUB_ENV -Value "PATH=$mex;$mex\bin;$mex\lib;$env:PATH"
 
       - uses: matlab-actions/setup-matlab@v3
         with:
@@ -126,3 +126,18 @@ jobs:
         uses: matlab-actions/run-command@v3
         with:
           command: addpath('${{ github.workspace }}/mex'); v=[1+2i;3-1i]; assert(isequal(complex_conj(v),conj(v)))
+
+      # Windows runtime is being brought up (non-blocking). Same six marshalers,
+      # one session.
+      - name: MATLAB all fixtures (Windows, non-blocking)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        uses: matlab-actions/run-command@v3
+        with:
+          command: |
+            addpath('${{ github.workspace }}/mex');
+            assert(add_doubles(3.0,4.0)==7.0);
+            assert(isequal(matrix_scale([1 2;3 4],2.0),[2 4;6 8]));
+            assert(int64_double(int64(21))==int64(42));
+            assert(bool_not(true)==false);
+            disp('Windows: marshalers OK');
