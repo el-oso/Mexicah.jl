@@ -33,6 +33,11 @@ features:
 ---
 ```
 
+::: info Mexicah · *meh-SHEE-kah*
+Named after the **Mexica** of central Mexico. The name spells out
+**M**atrix-Laboratory **EX**ecutable **I**nterop: **C**ompiled, **A**OT, **H**ost-free.
+:::
+
 ## What is Mexicah.jl?
 
 Mexicah compiles a typed Julia function into a native MATLAB **MEX** file
@@ -92,9 +97,6 @@ the same MATLAB session. See [How it runs](guide/runtime.md) for the details.
 - [Installation](guide/installation.md) — one-time setup (Julia, `juliac`, a C compiler).
 - [Quickstart](guide/quickstart.md) — function → MEX → MATLAB in five steps.
 - [Examples](examples/index.md) — scalars, matrices, sparse, AD gradients, ODEs, GPU.
-
-> **Pronunciation:** *meh-SHEE-kah*, after the Mexica of central Mexico —
-> *Matrix-Laboratory EXecutable Interop: Compiled, AOT, Host-free.*
 
 ## Platform support
 
