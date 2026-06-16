@@ -237,3 +237,26 @@ end
 
 mex_errorf(id::AbstractString, msg::AbstractString)::Cvoid =
     @mexccall ccall(:mexErrMsgIdAndTxt, Cvoid, (Cstring, Cstring), id, msg)
+
+# Turn a caught Julia exception into a MATLAB error (raised, never returns). Kept
+# deliberately simple to stay juliac --trim=safe: `error(...)` throws
+# ErrorException whose `.msg` is the useful text; anything else reports its type
+# name. (Full `showerror` formatting would pull in heavy display machinery.)
+function _mex_report_error(@nospecialize(e))::Cvoid
+    # ErrorException.msg is typed AbstractString; *converting* it (String(...)) is a
+    # dynamic call juliac --trim=safe rejects. Instead `isa`-narrow it to a concrete
+    # String (a type check, not a conversion) and pass that. `error("...")` — the
+    # overwhelmingly common throw, including Mexicah's own marshaler errors — uses a
+    # String msg, so this preserves the useful text while staying trim-safe.
+    if e isa ErrorException
+        m = e.msg
+        if m isa String
+            mex_errorf("Mexicah:error", m)
+        else
+            mex_errorf("Mexicah:error", "Mexicah: error with a non-String message")
+        end
+    else
+        mex_errorf("Mexicah:error", "uncaught Julia exception in MEX call")
+    end
+    return
+end

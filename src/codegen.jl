@@ -84,10 +84,17 @@ function _gen_ccallable(
             prhs::Ptr{Mexicah.MxArray},
         )::Cvoid
         Mexicah._mexicah_init_once()
+        # Convert any Julia exception into a MATLAB error rather than aborting the
+        # whole MATLAB process. (mex_errorf longjmps in C, so the arg-count checks
+        # below are not Julia exceptions and pass straight through this try.)
+        try
     $check_stmt
     $load_stmts
     $call_stmt
     $store_stmts
+        catch e
+            Mexicah._mex_report_error(e)
+        end
         return
     end"""
 end
@@ -135,10 +142,15 @@ function _gen_call_stmt(mod_name::Symbol, func_name::Symbol, nargs::Int, rettype
 end
 
 function _gen_store_stmts(rettypes::Vector{Type})::String
-    lines = String[]
+    isempty(rettypes) && return ""
+    # MATLAB allocates only max(nlhs,1) plhs slots; storing every declared output
+    # when fewer were requested ([U,s,V] called as `U = f(A)`) writes past plhs.
+    lines = String["    _nout = max(Int(nlhs), 1)"]
     for (i, T) in enumerate(rettypes)
         tname = _type_literal(T)
-        push!(lines, "    Mexicah.store_result(plhs, $i, _ret$i::$tname)")
+        push!(lines, "    if $i <= _nout")
+        push!(lines, "        Mexicah.store_result(plhs, $i, _ret$i::$tname)")
+        push!(lines, "    end")
     end
     return join(lines, "\n")
 end

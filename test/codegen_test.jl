@@ -13,6 +13,29 @@
     @test occursin("_mexicah_init_once", src)
     @test occursin("Float64", src)
     @test occursin("AUTO-GENERATED", src)
+    # Exceptions are trapped and converted to a MATLAB error, not left to abort.
+    @test occursin("try", src)
+    @test occursin("_mex_report_error", src)
+end
+
+@testitem "generate_mex_source guards multi-output stores by nlhs" begin
+    using Mexicah, Test
+
+    module TestFuncsMO
+    svd3(A::Matrix{Float64}) = (A, A[:, 1], A)
+    end
+
+    src = Mexicah.generate_mex_source(
+        TestFuncsMO,
+        :svd3,
+        Type[Matrix{Float64}],
+        Type[Matrix{Float64}, Vector{Float64}, Matrix{Float64}],
+        :svd3,
+    )
+    # Outputs must be gated on max(nlhs,1) so a 1-output call does not write past plhs.
+    @test occursin("_nout = max(Int(nlhs), 1)", src)
+    @test occursin("if 1 <= _nout", src)
+    @test occursin("if 3 <= _nout", src)
 end
 
 @testitem "generate_mex_source argument count check is correct" begin

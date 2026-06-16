@@ -282,6 +282,10 @@ function _load_dims(pa::MxArray, ::Val{N})::NTuple{N, Int} where {N}
     if N == 1
         return (Int(mx_get_number_of_elements(pa)),)
     else
+        nd = Int(mx_get_number_of_dimensions(pa))
+        # Guard the unsafe_load below: reading more extents than MATLAB reports
+        # would run past the mxGetDimensions buffer.
+        nd == N || error("Mexicah: expected a $(N)-D array argument, got $(nd)-D")
         dptr = mx_get_dimensions(pa)
         return ntuple(i -> Int(unsafe_load(dptr, i)), Val(N))
     end

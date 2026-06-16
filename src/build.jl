@@ -353,12 +353,28 @@ function _gateway_c_source(impl_name::String, entry::String)::String
     }
     #endif
 
+    /* Raise a MATLAB error if the implementation library can't be loaded, instead
+       of silently returning with no output. mexErrMsgIdAndTxt is resolved from the
+       already-loaded libmex (MATLAB), so the gateway still links no MATLAB libs. */
+    typedef void (*mexerr_t)(const char *, const char *);
+    static void mexicah_fail(void) {
+    #ifdef _WIN32
+        HMODULE m = GetModuleHandleA("libmex.dll");
+        mexerr_t f = m ? (mexerr_t)(void *)GetProcAddress(m, "mexErrMsgIdAndTxt") : 0;
+    #else
+        mexerr_t f = (mexerr_t)dlsym(RTLD_DEFAULT, "mexErrMsgIdAndTxt");
+    #endif
+        if (f) f("Mexicah:gatewayLoadFailed",
+            "Mexicah gateway could not load $(impl_name) or its $(entry) entry; see stderr.");
+    }
+
     #ifdef _WIN32
     __declspec(dllexport)
     #endif
     void mexFunction(int nlhs, void **plhs, int nrhs, void **prhs) {
         if (!g_impl) mexicah_load();
-        if (g_impl) g_impl(nlhs, plhs, nrhs, prhs);
+        if (!g_impl) { mexicah_fail(); return; }
+        g_impl(nlhs, plhs, nrhs, prhs);
     }
     """
 end
