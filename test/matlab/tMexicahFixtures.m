@@ -81,5 +81,21 @@ classdef tMexicahFixtures < matlab.unittest.TestCase
             verifyEqual(tc, s.mean, 4.0, 'AbsTol', 1e-12);
             verifyEqual(tc, double(s.n), 3.0);
         end
+
+        function tMinmaxTwoOutputs(tc)      % multiple outputs
+            [lo, hi] = minmax_vec([3.0; 1.0; 2.0]);
+            verifyEqual(tc, lo, 1.0);
+            verifyEqual(tc, hi, 3.0);
+        end
+
+        function tMinmaxOneOutput(tc)       % nlhs guard: 1-output call must not crash
+            lo = minmax_vec([3.0; 1.0; 2.0]);
+            verifyEqual(tc, lo, 1.0);
+        end
+
+        function tStatsTotal(tc)            % struct input (StructMarshaler load)
+            verifyEqual(tc, stats_total(struct('mean', 4.0, 'n', 3)), 12.0, ...
+                'AbsTol', 1e-12);
+        end
     end
 end

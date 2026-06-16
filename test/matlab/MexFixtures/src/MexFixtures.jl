@@ -81,6 +81,17 @@ function make_stats(v::Vector{Float64})::Stats
     return Stats(sum(v) / length(v), length(v))
 end
 
+# Multiple outputs — exercises the nlhs-aware store (calling with one output must
+# not write past plhs).
+function minmax_vec(v::Vector{Float64})::Tuple{Float64, Float64}
+    return (minimum(v), maximum(v))
+end
+
+# Struct INPUT — exercises StructMarshaler load (MATLAB struct → Julia Stats).
+function stats_total(s::Stats)::Float64
+    return s.mean * Float64(s.n)
+end
+
 # (function, input types, output types), in build order. The first entry bundles
 # the Julia runtime; the rest reuse it (see build_fixtures.jl).
 const FIXTURES = [
@@ -97,6 +108,8 @@ const FIXTURES = [
     (cube_add1, Type[Array{Float64, 3}], Type[Array{Float64, 3}]),
     (cmat_conj, Type[Matrix{ComplexF64}], Type[Matrix{ComplexF64}]),
     (make_stats, Type[Vector{Float64}], Type[Stats]),
+    (minmax_vec, Type[Vector{Float64}], Type[Float64, Float64]),
+    (stats_total, Type[Stats], Type[Float64]),
 ]
 
 end # module MexFixtures

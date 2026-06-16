@@ -117,9 +117,9 @@ jobs:
 
       # All fixtures share ONE juliac library (one Julia runtime), so they can be
       # called together in a single MATLAB session — the real test of the
-      # shared-runtime redesign. Twelve marshalers in one session (Float64/Float32,
-      # int widths, Bool, Float32 matrix, 3-D array, complex vector/matrix, struct),
-      # blocking on Linux and Windows. (sparse is tested separately — see below.)
+      # shared-runtime redesign. 14 fixtures in one session (Float64/Float32, int
+      # widths, Bool, Float32 matrix, 3-D array, complex vector/matrix, struct in &
+      # out, multi-output), blocking. (sparse is tested separately — see below.)
       - name: MATLAB fixtures (one session, non-sparse)
         if: runner.os != 'macOS'
         timeout-minutes: 8
@@ -139,7 +139,10 @@ jobs:
             A3=reshape(double(1:24),2,3,4); assert(isequal(cube_add1(A3),A3+1));
             M=[1+2i 3-1i; 1i 2]; assert(isequal(cmat_conj(M),conj(M)));
             s=make_stats([2.0;4.0;6.0]); assert(s.mean==4.0 && s.n==3);
-            disp('12 marshalers OK in one MATLAB session');
+            [lo,hi]=minmax_vec([3.0;1.0;2.0]); assert(lo==1.0 && hi==3.0);
+            lo1=minmax_vec([3.0;1.0;2.0]); assert(lo1==1.0);
+            assert(stats_total(struct('mean',4.0,'n',3))==12.0);
+            disp('14 fixtures OK in one MATLAB session');
 
       # macOS: same one-session test as Linux/Windows. The impl dylib carries
       # @loader_path/lib rpaths (see _fix_impl_rpath) so it finds bundled libjulia
@@ -164,7 +167,10 @@ jobs:
             A3=reshape(double(1:24),2,3,4); assert(isequal(cube_add1(A3),A3+1));
             M=[1+2i 3-1i; 1i 2]; assert(isequal(cmat_conj(M),conj(M)));
             s=make_stats([2.0;4.0;6.0]); assert(s.mean==4.0 && s.n==3);
-            disp('12 marshalers OK in one MATLAB session');
+            [lo,hi]=minmax_vec([3.0;1.0;2.0]); assert(lo==1.0 && hi==3.0);
+            lo1=minmax_vec([3.0;1.0;2.0]); assert(lo1==1.0);
+            assert(stats_total(struct('mean',4.0,'n',3))==12.0);
+            disp('14 fixtures OK in one MATLAB session');
       - name: macOS crash diagnostics
         if: always() && runner.os == 'macOS'
         shell: bash
