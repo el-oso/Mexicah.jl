@@ -191,19 +191,12 @@ jobs:
           log show --last 10m --predicate 'eventMessage CONTAINS "MATLAB" OR senderImagePath CONTAINS "mexicah"' 2>/dev/null | grep -iE "crash|signal|abort|fault|mexicah" | head -20
           echo "(end diagnostics)"
 
-      - name: MATLAB sparse_fro (Linux)
-        if: runner.os == 'Linux'
+      # Sparse on every OS. The accessors target the _730 (64-bit large-array)
+      # symbols where needed — bare mxGetIr is rejected as obsolete in a MEX — so
+      # this is now blocking everywhere (macOS via the _mxsym resolver, Windows via
+      # the explicit _730 suffix, Linux via bare names).
+      - name: MATLAB sparse_fro
+        timeout-minutes: 8
         uses: matlab-actions/run-command@v3
         with:
-          command: addpath('${{ github.workspace }}/mex'); assert(abs(sparse_fro(sparse([1 0;0 2]))-sqrt(5))<1e-12)
-
-      # On Windows/macOS MATLAB rejects the legacy sparse accessors (mxGetIr) as
-      # obsolete for a 64-bit MEX without -largeArrayDims, which needs MATLAB
-      # headers the cc gateway avoids. Non-blocking pending that declaration.
-      - name: MATLAB sparse_fro (Windows/macOS, non-blocking)
-        if: runner.os != 'Linux'
-        continue-on-error: true
-        timeout-minutes: 6
-        uses: matlab-actions/run-command@v3
-        with:
-          command: addpath('${{ github.workspace }}/mex'); assert(abs(sparse_fro(sparse([1 0;0 2]))-sqrt(5))<1e-12)
+          command: addpath('${{ github.workspace }}/mex'); assert(abs(sparse_fro(sparse([1 0;0 2]))-sqrt(5))<1e-12); disp('sparse_fro OK')

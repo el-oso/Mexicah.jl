@@ -37,13 +37,20 @@
 end
 
 # Rewrite a `ccall(:sym, …)`: name `lib` on Windows, resolve via `_mxsym` on macOS,
-# leave bare on Linux.
-function _ccall_with_lib(ccall_expr::Expr, lib::String)
+# leave bare on Linux. `win_suffix` appends a version tag to the symbol on Windows
+# only (e.g. "_730" for the 64-bit large-array sparse accessors, whose bare names
+# MATLAB rejects as obsolete); macOS already discovers the suffix in `_mxsym`, and
+# Linux's bare names work, so neither needs it.
+function _ccall_with_lib(ccall_expr::Expr, lib::String; win_suffix::String = "")
     (ccall_expr.head === :call && ccall_expr.args[1] === :ccall) ||
         error("@mxccall/@mexccall expects a `ccall(...)` expression")
     a = collect(ccall_expr.args)
     if Sys.iswindows()
-        a[2] = Expr(:tuple, a[2], lib)   # :mxFoo  ->  (:mxFoo, "libmx")
+        sym = a[2]
+        if !isempty(win_suffix) && sym isa QuoteNode
+            sym = QuoteNode(Symbol(sym.value, win_suffix))   # :mxGetIr -> :mxGetIr_730
+        end
+        a[2] = Expr(:tuple, sym, lib)   # :mxFoo  ->  (:mxFoo, "libmx")
     elseif Sys.isapple()
         a[2] = Expr(:call, :_mxsym, a[2])   # :mxFoo  ->  _mxsym(:mxFoo)
     else
@@ -56,6 +63,11 @@ macro mxccall(e)
 end
 macro mexccall(e)
     return _ccall_with_lib(e, "libmex")
+end
+# Large-array (64-bit) sparse accessors: MATLAB rejects the bare names as obsolete
+# in a MEX, so target the `_730` variants on Windows.
+macro mxccall730(e)
+    return _ccall_with_lib(e, "libmx"; win_suffix = "_730")
 end
 
 # ── Dimensions ────────────────────────────────────────────────────────────────
@@ -128,12 +140,12 @@ mx_get_data(pa::MxArray)::Ptr{Cvoid} =
 # ── Sparse ────────────────────────────────────────────────────────────────────
 
 mx_create_sparse(m::Csize_t, n::Csize_t, nzmax::Csize_t, flag::Cint)::MxArray =
-    @mxccall ccall(:mxCreateSparse, MxArray, (Csize_t, Csize_t, Csize_t, Cint), m, n, nzmax, flag)
-mx_get_nzmax(pa::MxArray)::Csize_t = @mxccall ccall(:mxGetNzmax, Csize_t, (MxArray,), pa)
+    @mxccall730 ccall(:mxCreateSparse, MxArray, (Csize_t, Csize_t, Csize_t, Cint), m, n, nzmax, flag)
+mx_get_nzmax(pa::MxArray)::Csize_t = @mxccall730 ccall(:mxGetNzmax, Csize_t, (MxArray,), pa)
 mx_get_ir(pa::MxArray)::Ptr{Csize_t} =
-    @mxccall ccall(:mxGetIr, Ptr{Csize_t}, (MxArray,), pa)
+    @mxccall730 ccall(:mxGetIr, Ptr{Csize_t}, (MxArray,), pa)
 mx_get_jc(pa::MxArray)::Ptr{Csize_t} =
-    @mxccall ccall(:mxGetJc, Ptr{Csize_t}, (MxArray,), pa)
+    @mxccall730 ccall(:mxGetJc, Ptr{Csize_t}, (MxArray,), pa)
 
 # ── Memory management ─────────────────────────────────────────────────────────
 

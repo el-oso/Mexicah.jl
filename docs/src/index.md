@@ -112,7 +112,12 @@ the same MATLAB session. See [How it runs](guide/runtime.md) for the details.
 | Platform | Status |
 |---|---|
 | Linux (x86-64) | ✅ supported |
-| Windows / macOS | 🚧 in progress |
+| Windows (x86-64) | ✅ supported |
+| macOS (Apple Silicon) | ✅ supported |
+
+All three are exercised end-to-end in CI: every build loads and runs its MEX in
+real MATLAB. (Sparse matrices are supported on Linux and macOS; Windows sparse is
+in progress.)
 
 GPU kernels (NVIDIA, via KernelAbstractions) compile to PTX and run with only the
 NVIDIA driver — see the [GPU example](examples/cuda.md).
