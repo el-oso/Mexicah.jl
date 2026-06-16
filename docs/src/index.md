@@ -1,47 +1,95 @@
-# Mexicah.jl
+---
+layout: home
 
-> **Pronunciation:** *meh-SHEE-kah* — named after the Mexica, the Nahuatl-speaking people of central Mexico.
->
-> **Mexicah** — *Matrix-Laboratory EXecutable Interop: Compiled, AOT, Host-free.*
+hero:
+  name: "Mexicah.jl"
+  text: "Julia functions → MATLAB MEX"
+  tagline: "Compile your Julia code into native MATLAB extensions. No Julia install on the user's machine."
+  actions:
+    - theme: brand
+      text: Get Started
+      link: /guide/installation
+    - theme: alt
+      text: Quickstart
+      link: /guide/quickstart
+    - theme: alt
+      text: Examples
+      link: /examples/
 
-**Compile Julia functions into standalone MATLAB MEX extensions.**
+features:
+  - icon: 📦
+    title: No Julia at runtime
+    details: The MEX bundle ships its own libjulia. Your MATLAB users just call the function — they never install Julia.
+  - icon: 🛠️
+    title: No MATLAB at build time
+    details: Build with Julia 1.12+ and a C compiler. No MATLAB, no headers, no toolbox licenses to compile.
+  - icon: ⚡
+    title: Zero-copy arrays
+    details: Array inputs are read straight from MATLAB's buffers — no copy in, one copy out.
+  - icon: 🧩
+    title: Batteries included
+    details: Enzyme/ForwardDiff gradients, ModelingToolkit ODEs, DataFrames, JuMP, LinearAlgebra, and CUDA GPU kernels.
+---
 
-Mexicah.jl takes existing Julia code and compiles it into native MEX files
-(`.mexa64`, `.mexw64`, `.mexmaca64`) that MATLAB users call like any other
-built-in — with no Julia installation required at runtime.
+# What is Mexicah?
+
+Mexicah compiles a typed Julia function into a native MATLAB **MEX** file
+(`.mexa64` / `.mexw64` / `.mexmaca64`) that MATLAB calls like any built-in. The
+heavy lifting is done by Julia's ahead-of-time compiler (`juliac`); Mexicah
+generates the marshaling glue and a tiny loader so the result drops cleanly into
+MATLAB.
+
+> **Pronunciation:** *meh-SHEE-kah* — after the Mexica of central Mexico.
+> The name unpacks to *Matrix-Laboratory EXecutable Interop: Compiled, AOT, Host-free.*
+
+## A 30-second taste
+
+Write a typed function in a small Julia package:
 
 ```julia
+module MySolvers
 using Mexicah
 
-@mexfunction function solve_ode(u0::Vector{Float64}, t::Float64)::Vector{Float64}
-    # … your Julia solver …
+@mexfunction function add_doubles(x::Float64, y::Float64)::Float64
+    return x + y
 end
-
-build_mex(solve_ode; output="./mex/")
+end
 ```
 
-```matlab
-% MATLAB side
-run('mex/mexicah_setup.m')
-u = solve_ode([1.0; 0.0], 10.0);
-```
-
-## Key properties
-
-| Property | Detail |
-|---|---|
-| **Build requires MATLAB?** | No — only Julia 1.12+ and a C linker |
-| **Runtime requires Julia?** | No — `libjulia` is bundled alongside the MEX file |
-| **Data transfer overhead** | Zero-copy for array inputs; one `memcpy` for array outputs |
-| **Binary size** | ~2 MB per function with `--trim=safe` (vs 200 MB for a full sysimage) |
-| **AD support** | Enzyme.jl (reverse-mode) and ForwardDiff.jl (forward-mode) |
-| **MTK support** | Compile ODE RHS and Jacobian directly from a `ODESystem` |
-
-## Installation
+Build it (from a project that has both `Mexicah` and `MySolvers`):
 
 ```julia
-using Pkg
-Pkg.add(url="https://github.com/el-oso/Mexicah.jl")
+using Mexicah, MySolvers
+build_shared_mex([(MySolvers.add_doubles, Type[Float64, Float64], Type[Float64])];
+                 output = "mex/")
 ```
 
-Julia 1.12 or later is required. `juliac` must be on your `PATH` (it ships with Julia 1.12+).
+Call it in MATLAB:
+
+```matlab
+run('mex/mexicah_setup.m')   % once per session
+add_doubles(3, 4)            % ans = 7
+```
+
+That's the whole loop. The [Quickstart](guide/quickstart.md) walks through it
+step by step, and [Installation](guide/installation.md) covers the one-time setup.
+
+## How it works (one paragraph)
+
+`juliac --trim=safe` compiles your function and a minimal Julia runtime into a
+shared library. Because MATLAB can't load that library as a MEX directly,
+Mexicah ships a **tiny C gateway** as the actual `.mex*` file: MATLAB loads the
+gateway, which loads the Julia library once and forwards the call. Multiple
+functions are compiled into **one** shared library (so they share a single Julia
+runtime and can all be used in the same MATLAB session). See
+[How it runs](guide/runtime.md) for the details.
+
+## Platform support
+
+| Platform | Status |
+|---|---|
+| Linux (x86-64) | ✅ supported |
+| Windows / macOS | 🚧 in progress |
+
+GPU kernels (NVIDIA, via KernelAbstractions) compile to PTX and run with only
+the NVIDIA driver — see the [GPU example](examples/cuda.md).

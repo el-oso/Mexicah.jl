@@ -16,40 +16,35 @@ Place the resulting `mexicah` binary on your `PATH`.
 ### `mexicah compile`
 
 ```
-mexicah compile <source> [options]
+mexicah compile <package> [options]
 ```
 
-Compile one or more Julia functions from `<source>` into MEX files.
+Compile the selected `@mexfunction`s from `<package>` into one shared library
+plus a thin gateway MEX per function — the same as `build_shared_mex`, so the
+results share one Julia runtime and can be used together in a MATLAB session.
 
-`<source>` can be:
-- A `.jl` file path — loaded with `include`
-- A package name — loaded with `using`
+`<package>` must be a **loadable Julia package** whose functions are annotated
+with `@mexfunction`. `juliac` compiles in a separate process and cannot see
+functions defined only in a script or the REPL.
 
 #### Options
 
 | Option | Default | Description |
 |---|---|---|
 | `--function <names>` | — | Comma-separated function names to compile. Required unless `--all-exported`. |
-| `--output <dir>` | `./mex/` | Output directory for `.mex*` files and bundle. |
-| `--no-trim` | off | Disable `juliac --trim=safe`. Produces larger but more permissive binaries. |
-| `--no-bundle` | off | Do not bundle `libjulia.so` alongside the MEX file. |
+| `--output <dir>` | `./mex/` | Output directory for the gateways, shared library, and bundle. |
 | `--all-exported` | off | Compile every function registered via `@mexfunction`. |
+| `--no-trim` | off | Disable `juliac --trim=safe`. Produces larger but more permissive binaries. |
 | `--juliac <path>` | `juliac` | Path to the juliac binary. |
 
 #### Examples
 
 ```bash
-# Single function from a file
-mexicah compile mymodel.jl --function solve --output ./mex/
+# Every @mexfunction-annotated function in the package
+mexicah compile MySolvers --all-exported --output ./mex/
 
-# Multiple functions
-mexicah compile mymodel.jl --function rhs,jac --output ./mex/
-
-# All @mexfunction-annotated exports from a package
-mexicah compile MyPkg --all-exported --output ./mex/
-
-# Disable trimming for a debug build
-mexicah compile mymodel.jl --function solve --output ./mex-debug/ --no-trim
+# Just a couple of them
+mexicah compile MySolvers --function add_doubles,scale_rows --output ./mex/
 ```
 
 ### `mexicah help`

@@ -1,38 +1,90 @@
 # Installation
 
-## Requirements
+This page gets your machine ready to **build** MEX files. Your MATLAB users
+need none of this — they only need MATLAB.
 
-| Requirement | Version |
-|---|---|
-| Julia | 1.12 or later |
-| `juliac` | ships with Julia 1.12 (check: `juliac --version`) |
-| C linker | `gcc` / `clang` / MSVC (already present on most systems) |
-| MATLAB | **not required at build time** |
+## What you need
 
-## Installing Mexicah.jl
+| Tool | Why | How to check |
+|---|---|---|
+| **Julia 1.12+** | Mexicah and `juliac` require it | `julia --version` |
+| **`juliac`** | the Julia → binary compiler | `juliac --version` |
+| **A C compiler** | builds the tiny MEX loader (`gcc`/`clang`) | `cc --version` |
+| MATLAB | **not needed to build** — only to run | — |
 
-```julia
-using Pkg
-Pkg.add(url="https://github.com/el-oso/Mexicah.jl")
+> 🐧 **Linux is the supported platform today.** Windows and macOS builds are in
+> progress.
+
+## 1. Install Julia
+
+If you don't have Julia, the easiest way is [juliaup](https://github.com/JuliaLang/juliaup):
+
+```bash
+curl -fsSL https://install.julialang.org | sh
 ```
 
-## Verifying juliac is available
+Then make sure you're on 1.12 or newer:
+
+```bash
+juliaup add 1.12
+julia --version      # should print 1.12.x or later
+```
+
+## 2. Install `juliac`
+
+`juliac` is distributed as a Julia "app". Install it once:
+
+```bash
+julia -e 'using Pkg; Pkg.Apps.add("JuliaC")'
+```
+
+This drops a `juliac` launcher in `~/.julia/bin`. Add that to your `PATH` (put
+this in your `~/.bashrc` / `~/.zshrc` so it sticks):
+
+```bash
+export PATH="$HOME/.julia/bin:$PATH"
+```
+
+Check it works:
 
 ```bash
 juliac --version
 ```
 
-If `juliac` is not on your PATH, add Julia's `bin` directory:
+> **If that fails to find `JuliaC` in the registry** (it can lag on fresh
+> machines), install it straight from source instead:
+> ```bash
+> julia -e 'using Pkg; Pkg.Apps.add(url="https://github.com/JuliaLang/JuliaC.jl.git")'
+> ```
+
+## 3. Make sure a C compiler is present
+
+Mexicah ships a tiny C loader alongside your MEX, so it needs a C compiler at
+build time (you almost certainly already have one):
 
 ```bash
-export PATH="$(julia -e 'print(Sys.BINDIR)'):$PATH"
+cc --version        # or: gcc --version
 ```
 
-## Optional dependencies
+On Ubuntu/Debian, if it's missing: `sudo apt-get install build-essential`.
 
-Load these before using the corresponding features:
+## 4. Install Mexicah.jl
 
 ```julia
-using Enzyme        # for @mexgradient backend=:enzyme
-using ModelingToolkit  # for build_mex_from_mtk
+using Pkg
+Pkg.add(url = "https://github.com/el-oso/Mexicah.jl")
 ```
+
+That's it — head to the [Quickstart](quickstart.md).
+
+## Optional add-ons
+
+Mexicah grows extra build features when you load these packages (each is
+optional — install only what you use):
+
+| Package | Unlocks |
+|---|---|
+| `Enzyme` / `ForwardDiff` | `@mexgradient` (compile a gradient) |
+| `ModelingToolkit` | compile an ODE right-hand side / Jacobian |
+| `DataFrames`, `JuMP` | DataFrame and optimization bridges |
+| `CUDA` + `KernelAbstractions` | GPU kernels via `@mexgpukernel` |

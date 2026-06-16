@@ -1,76 +1,113 @@
 # Quickstart
 
-This page walks through the complete workflow from a Julia function to a
-working MATLAB call in five steps.
+We'll go from a Julia function to a working MATLAB call. Budget ~5 minutes
+(plus a minute or two the first time `juliac` compiles).
 
-## Step 1 — Write a typed Julia function
+> **Why a package?** `juliac` compiles your code in a *separate* process, so it
+> can only see functions that live in a real Julia **package** on disk — not
+> functions typed into the REPL or a loose script. Step 1 makes that package; it
+> takes one command.
 
-All argument and return types must be **concrete**. Mexicah uses them to
-generate the marshaling code and to guide `juliac --trim=safe`.
+## Step 1 — Put your function in a small package
 
 ```julia
-# mymodel.jl
+using Pkg
+Pkg.generate("MySolvers")          # creates MySolvers/ with Project.toml + src/
+Pkg.activate("MySolvers")
+Pkg.add(url = "https://github.com/el-oso/Mexicah.jl")
+```
+
+Now edit `MySolvers/src/MySolvers.jl` to define a typed function:
+
+```julia
+module MySolvers
+
 using Mexicah
 
-@mexfunction function lorenz_rhs(
-    u::Vector{Float64},
-    p::Vector{Float64},
-    t::Float64,
-)::Vector{Float64}
-    σ, ρ, β = p[1], p[2], p[3]
-    [σ * (u[2] - u[1]), u[1] * (ρ - u[3]) - u[2], u[1] * u[2] - β * u[3]]
+# Every argument and the return value must have a CONCRETE type — Mexicah uses
+# them to generate the MATLAB glue.
+@mexfunction function add_doubles(x::Float64, y::Float64)::Float64
+    return x + y
+end
+
+@mexfunction function scale_rows(A::Matrix{Float64}, s::Float64)::Matrix{Float64}
+    return A .* s
+end
+
 end
 ```
 
-## Step 2 — Build the MEX file
+The supported argument/return types are listed in
+[Type Support](../reference/marshaling.md) (scalars, vectors, matrices, sparse,
+integers, booleans, …).
+
+## Step 2 — Build the MEX files
+
+From the activated `MySolvers` project:
 
 ```julia
-build_mex(lorenz_rhs; output="./mex/")
+using Mexicah, MySolvers
+
+build_shared_mex(
+    [
+        (MySolvers.add_doubles, Type[Float64, Float64], Type[Float64]),
+        (MySolvers.scale_rows,  Type[Matrix{Float64}, Float64], Type[Matrix{Float64}]),
+    ];
+    output = "mex/",
+)
 ```
 
-This produces:
-```
-./mex/
-├── lorenz_rhs.mexa64        # the MEX extension (Linux)
-├── libjulia.so              # Julia runtime (shared across all MEX files)
-├── …other Julia deps…
-└── mexicah_setup.m          # run this once in MATLAB
-```
+This writes a `mex/` folder:
 
-Or use the CLI:
-
-```bash
-mexicah compile mymodel.jl --function lorenz_rhs --output ./mex/
+```
+mex/
+├── add_doubles.mexa64          # ← one tiny gateway MEX per function
+├── scale_rows.mexa64
+├── mexicah_shared_impl.so      # the compiled Julia code (shared by both)
+├── lib/                        # bundled libjulia + runtime
+└── mexicah_setup.m             # run this once in MATLAB
 ```
 
-## Step 3 — Set up MATLAB
+`build_shared_mex` compiles **all** your functions into one shared library, so
+they share a single Julia runtime and can be used together in the same MATLAB
+session. (Building one function on its own? `build_mex(f; input_types=…,
+output_types=…, output="mex/")` works too.)
 
-In MATLAB (once per session):
+## Step 3 — Set up MATLAB (once per session)
+
+Copy the `mex/` folder to your MATLAB machine, then:
 
 ```matlab
 run('mex/mexicah_setup.m')
 ```
 
-This adds the bundle directory to `LD_LIBRARY_PATH` so MATLAB can find
-`libjulia.so` when it loads the MEX file.
+This puts the bundled `libjulia` on the library path and adds `mex/` to your
+MATLAB path so the functions are callable.
 
 ## Step 4 — Call from MATLAB
 
 ```matlab
-u0 = [1.0; 0.0; 0.0];
-p  = [10.0; 28.0; 8/3];  % σ, ρ, β
-t  = 0.0;
+add_doubles(3, 4)                 % ans = 7
 
-du = lorenz_rhs(u0, p, t);
-disp(du)   % [-10.0; 28.0; 0.0]
+scale_rows([1 2; 3 4], 10)        % ans = [10 20; 30 40]
 ```
 
-## Step 5 — Share the MEX file
+They behave like ordinary MATLAB functions.
 
-Distribute the contents of `./mex/` to your MATLAB users. They do **not**
-need Julia installed. The bundle is self-contained.
+## Step 5 — Ship it
 
-!!! tip "Runtime sharing"
-    When multiple MEX files built with Mexicah are in the same directory,
-    they all share the same `libjulia.so`. The Julia runtime is initialized
-    exactly once per MATLAB session regardless of how many MEX files are loaded.
+Hand the `mex/` folder to your MATLAB users. They need **only MATLAB** — no
+Julia, no toolchain. The Julia runtime is bundled inside.
+
+::: tip One runtime per bundle
+Functions built together with `build_shared_mex` share one Julia runtime, so you
+can call any mix of them in a session. Functions built **separately** each carry
+their own runtime and can't be loaded into the same MATLAB session — so build
+everything you'll use together in one `build_shared_mex` call.
+:::
+
+## Where to go next
+
+- [Examples](../examples/index.md) — scalars, matrices, sparse, AD gradients, ODEs, GPU.
+- [How it runs](runtime.md) — what the gateway and bundle actually do.
+- [Type Support](../reference/marshaling.md) — the full type table.

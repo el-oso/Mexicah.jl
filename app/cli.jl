@@ -15,25 +15,26 @@ const USAGE = """
 mexicah — compile Julia functions into MATLAB MEX extensions
 
 Usage:
-  mexicah compile <source> [options]
+  mexicah compile <package> [options]
   mexicah help
 
-Commands:
-  compile   Build one or more MEX files from a Julia source file or package.
+Compiles every selected function into ONE shared library plus a thin gateway
+MEX per function, so they share a single Julia runtime and can be used together
+in one MATLAB session. <package> must be a loadable Julia package whose
+functions are annotated with @mexfunction (juliac cannot see functions defined
+only in a script or the REPL).
 
 Options:
   --function <name(s)>   Comma-separated function names to compile.
                          Required unless --all-exported is given.
   --output <dir>         Output directory (default: ./mex/).
-  --no-trim              Disable juliac --trim=safe (larger but more permissive binary).
-  --no-bundle            Do not bundle the Julia runtime alongside the MEX file.
   --all-exported         Compile every function registered via @mexfunction.
+  --no-trim              Disable juliac --trim=safe (larger, more permissive).
   --juliac <path>        Path to the juliac binary (default: juliac on PATH).
 
 Examples:
-  mexicah compile mymodel.jl --function solve --output ./mex/
-  mexicah compile MyPkg --all-exported --output ./mex/
-  mexicah compile mymodel.jl --function rhs,jac --output ./mex/ --no-trim
+  mexicah compile MySolvers --all-exported --output ./mex/
+  mexicah compile MySolvers --function add_doubles,scale_rows --output ./mex/
 """
 
 function (@main)(args::Vector{String})::Cint
@@ -57,7 +58,6 @@ function compile_cmd(args::Vector{String})::Cint
     functions = String[]
     output = "./mex/"
     trim = true
-    bundle = true
     all_exported = false
     juliac_bin = "juliac"
 
@@ -72,8 +72,6 @@ function compile_cmd(args::Vector{String})::Cint
             output = args[i]
         elseif a == "--no-trim"
             trim = false
-        elseif a == "--no-bundle"
-            bundle = false
         elseif a == "--all-exported"
             all_exported = true
         elseif a == "--juliac" && i < length(args)
@@ -89,7 +87,7 @@ function compile_cmd(args::Vector{String})::Cint
     end
 
     if isempty(source)
-        println(stderr, "mexicah compile: source file or package name required.")
+        println(stderr, "mexicah compile: package name required.")
         return 1
     end
 
@@ -98,40 +96,32 @@ function compile_cmd(args::Vector{String})::Cint
         return 1
     end
 
-    mod = _load_source(source)
-    mod === nothing && return 1
+    _load_source(source) === nothing && return 1
 
-    if all_exported
-        build_all_mex(; output = output, trim = trim, bundle = bundle, juliac_bin = juliac_bin)
-    else
-        for fname in functions
-            sym = Symbol(strip(fname))
-            if !isdefined(mod, sym)
-                println(stderr, "mexicah: '$sym' not found in $source")
-                return 1
-            end
-            f = getfield(mod, sym)
-            info = get(Mexicah._MEX_EXPORTS, sym, nothing)
-            if info === nothing
-                println(
-                    stderr,
-                    "mexicah: '$sym' has no registered type signature. " *
-                        "Annotate it with @mexfunction or register manually.",
-                )
-                return 1
-            end
-            build_mex(
-                f;
-                input_types = info.argtypes,
-                output_types = info.rettypes,
-                name = sym,
-                output = output,
-                trim = trim,
-                bundle = bundle,
-                juliac_bin = juliac_bin,
+    # Collect (function, input types, output types) for every selected function
+    # from the @mexfunction registry, then build them into one shared library.
+    targets = all_exported ? collect(keys(Mexicah._MEX_EXPORTS)) :
+        Symbol[Symbol(strip(f)) for f in functions]
+
+    funcs = Tuple{Any, Vector{Type}, Vector{Type}}[]
+    for sym in targets
+        info = get(Mexicah._MEX_EXPORTS, sym, nothing)
+        if info === nothing
+            println(
+                stderr,
+                "mexicah: '$sym' has no @mexfunction signature registered in $source.",
             )
+            return 1
         end
+        push!(funcs, (getfield(info.mod, sym), info.argtypes, info.rettypes))
     end
+
+    if isempty(funcs)
+        println(stderr, "mexicah: no @mexfunction functions found to compile.")
+        return 1
+    end
+
+    build_shared_mex(funcs; output = output, trim = trim, juliac_bin = juliac_bin)
     return 0
 end
 
