@@ -27,6 +27,19 @@ end
 @verify SparseFloat64Marshaler trim_compat = true
 @verify ComplexFloat64Marshaler trim_compat = true
 @verify StringMarshaler trim_compat = true
+# Additional real numeric scalars
+@verify Float32Marshaler trim_compat = true
+@verify Int8Marshaler trim_compat = true
+@verify Int16Marshaler trim_compat = true
+@verify UInt8Marshaler trim_compat = true
+@verify UInt16Marshaler trim_compat = true
+@verify UInt32Marshaler trim_compat = true
+# Parametric array marshalers — verify representative instantiations (the methods
+# are defined for all T/N, so one concrete instance proves the contract).
+@verify DenseArrayMarshaler{Float64, 2} trim_compat = true
+@verify DenseArrayMarshaler{Int32, 1} trim_compat = true
+@verify DenseArrayMarshaler{Float32, 3} trim_compat = true
+@verify ComplexArrayMarshaler{2} trim_compat = true
 
 # TypeContracts._registry is a mutable Dict that is NOT preserved when a package
 # is loaded from a precompile cache (dict mutations to external modules are not

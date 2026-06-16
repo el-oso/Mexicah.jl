@@ -260,6 +260,138 @@ create(::StringMarshaler, ::Tuple)::MxArray = mx_create_string("")
 
 mx_class_id(::StringMarshaler)::Cint = mxCHAR_CLASS
 
+# ── Real numeric element type → mxClassID ─────────────────────────────────────
+# One method per supported bitstype; the absence of a fallback is intentional, so
+# an unsupported element type is a method error caught by marshaler_for.
+
+_mx_class_for(::Type{Float64})::Cint = mxDOUBLE_CLASS
+_mx_class_for(::Type{Float32})::Cint = mxSINGLE_CLASS
+_mx_class_for(::Type{Int8})::Cint = mxINT8_CLASS
+_mx_class_for(::Type{Int16})::Cint = mxINT16_CLASS
+_mx_class_for(::Type{Int32})::Cint = mxINT32_CLASS
+_mx_class_for(::Type{Int64})::Cint = mxINT64_CLASS
+_mx_class_for(::Type{UInt8})::Cint = mxUINT8_CLASS
+_mx_class_for(::Type{UInt16})::Cint = mxUINT16_CLASS
+_mx_class_for(::Type{UInt32})::Cint = mxUINT32_CLASS
+_mx_class_for(::Type{UInt64})::Cint = mxUINT64_CLASS
+
+# Read the array extents as an N-tuple of Int. A Julia Vector (N==1) maps to a
+# MATLAB n×1 column, so its length is the element count; for N≥2 read the first
+# N MATLAB dimensions (mxGetDimensions).
+function _load_dims(pa::MxArray, ::Val{N})::NTuple{N, Int} where {N}
+    if N == 1
+        return (Int(mx_get_number_of_elements(pa)),)
+    else
+        dptr = mx_get_dimensions(pa)
+        return ntuple(i -> Int(unsafe_load(dptr, i)), Val(N))
+    end
+end
+
+# ── Additional real numeric scalars (Float32, Int8/16, UInt8/16/32) ───────────
+# Generated to match the Int32/Int64 pattern: read/write the raw element via
+# mxGetData, allocate a 1×1 numeric matrix of the right class.
+
+for (Tname, cls) in (
+        (:Float32, mxSINGLE_CLASS),
+        (:Int8, mxINT8_CLASS),
+        (:Int16, mxINT16_CLASS),
+        (:UInt8, mxUINT8_CLASS),
+        (:UInt16, mxUINT16_CLASS),
+        (:UInt32, mxUINT32_CLASS),
+    )
+    T = getfield(Base, Tname)
+    Mname = Symbol(Tname, :Marshaler)
+    @eval begin
+        struct $Mname end
+        load(::$Mname, pa::MxArray)::$T = unsafe_load(Ptr{$T}(mx_get_data(pa)))
+        function store!(::$Mname, pa::MxArray, v::Any)::Cvoid
+            unsafe_store!(Ptr{$T}(mx_get_data(pa)), convert($T, v))
+            return
+        end
+        create(::$Mname, ::Tuple)::MxArray =
+            mx_create_numeric_matrix(Csize_t(1), Csize_t(1), $cls, mxREAL)
+        mx_class_id(::$Mname)::Cint = $cls
+    end
+end
+
+# ── Dense real numeric arrays of any element type and rank ────────────────────
+# Float64 Vector/Matrix keep their dedicated marshalers (above); this covers
+# every other element type and rank N (including Float64 with N ≥ 3).
+
+struct DenseArrayMarshaler{T, N} end
+
+function load(::DenseArrayMarshaler{T, N}, pa::MxArray)::Array{T, N} where {T, N}
+    ptr = Ptr{T}(mx_get_data(pa))
+    return unsafe_wrap(Array, ptr, _load_dims(pa, Val(N)); own = false)
+end
+
+function store!(::DenseArrayMarshaler{T, N}, pa::MxArray, v::Any)::Cvoid where {T, N}
+    arr = v::Array{T, N}
+    ptr = Ptr{T}(mx_get_data(pa))
+    GC.@preserve arr unsafe_copyto!(ptr, pointer(arr), length(arr))
+    return
+end
+
+function create(::DenseArrayMarshaler{T, N}, dims::Tuple)::MxArray where {T, N}
+    cls = _mx_class_for(T)
+    if N == 1
+        return mx_create_numeric_matrix(Csize_t(dims[1]::Int), Csize_t(1), cls, mxREAL)
+    elseif N == 2
+        return mx_create_numeric_matrix(Csize_t(dims[1]::Int), Csize_t(dims[2]::Int), cls, mxREAL)
+    else
+        d = Csize_t[Csize_t(x) for x in dims]
+        GC.@preserve d begin
+            return mx_create_numeric_array(Csize_t(N), pointer(d), cls, mxREAL)
+        end
+    end
+end
+
+function mx_class_id(::DenseArrayMarshaler{T, N})::Cint where {T, N}
+    return _mx_class_for(T)
+end
+
+# ── Complex arrays (Matrix / N-D), split Pr/Pi like the Vector marshaler ──────
+
+struct ComplexArrayMarshaler{N} end
+
+function load(::ComplexArrayMarshaler{N}, pa::MxArray)::Array{ComplexF64, N} where {N}
+    dims = _load_dims(pa, Val(N))
+    pr = mx_get_pr(pa)
+    pim = mx_get_pi(pa)
+    out = Array{ComplexF64, N}(undef, dims)
+    @inbounds for k in 1:length(out)
+        im = pim == C_NULL ? 0.0 : unsafe_load(pim, k)
+        out[k] = complex(unsafe_load(pr, k), im)
+    end
+    return out
+end
+
+function store!(::ComplexArrayMarshaler{N}, pa::MxArray, v::Any)::Cvoid where {N}
+    arr = v::Array{ComplexF64, N}
+    pr = mx_get_pr(pa)
+    pim = mx_get_pi(pa)
+    @inbounds for k in eachindex(arr)
+        unsafe_store!(pr, real(arr[k]), k)
+        unsafe_store!(pim, imag(arr[k]), k)
+    end
+    return
+end
+
+function create(::ComplexArrayMarshaler{N}, dims::Tuple)::MxArray where {N}
+    if N == 1
+        return mx_create_double_matrix(Csize_t(dims[1]::Int), Csize_t(1), mxCOMPLEX)
+    elseif N == 2
+        return mx_create_double_matrix(Csize_t(dims[1]::Int), Csize_t(dims[2]::Int), mxCOMPLEX)
+    else
+        d = Csize_t[Csize_t(x) for x in dims]
+        GC.@preserve d begin
+            return mx_create_numeric_array(Csize_t(N), pointer(d), mxDOUBLE_CLASS, mxCOMPLEX)
+        end
+    end
+end
+
+mx_class_id(::ComplexArrayMarshaler)::Cint = mxDOUBLE_CLASS
+
 # ── Dispatch: pick a marshaler for a Julia type ───────────────────────────────
 
 function marshaler_for(@nospecialize(T::Type))
@@ -273,10 +405,29 @@ function marshaler_for(@nospecialize(T::Type))
     T === SparseMatrixCSC{Float64, Int} && return SparseFloat64Marshaler()
     T === Vector{ComplexF64} && return ComplexFloat64Marshaler()
     T === String && return StringMarshaler()
+    # Additional real numeric scalars
+    T === Float32 && return Float32Marshaler()
+    T === Int8 && return Int8Marshaler()
+    T === Int16 && return Int16Marshaler()
+    T === UInt8 && return UInt8Marshaler()
+    T === UInt16 && return UInt16Marshaler()
+    T === UInt32 && return UInt32Marshaler()
+    # Dense numeric / complex arrays of any element type and rank
+    if T <: Array
+        ET = eltype(T)
+        ND = ndims(T)
+        ET === ComplexF64 && return ComplexArrayMarshaler{ND}()
+        if ET === Float64 || ET === Float32 ||
+                ET === Int8 || ET === Int16 || ET === Int32 || ET === Int64 ||
+                ET === UInt8 || ET === UInt16 || ET === UInt32 || ET === UInt64
+            return DenseArrayMarshaler{ET, ND}()
+        end
+    end
     error(
-        "Mexicah: no marshaler for type $T. Supported: Float64, Vector{Float64}, " *
-            "Matrix{Float64}, Int32, Int64, UInt64, Bool, SparseMatrixCSC{Float64,Int}, " *
-            "Vector{ComplexF64}, String",
+        "Mexicah: no marshaler for type $T. Supported: real numeric scalars " *
+            "(Float64/Float32, Int8/16/32/64, UInt8/16/32/64), Bool, dense numeric " *
+            "arrays Array{T,N} of those element types, SparseMatrixCSC{Float64,Int}, " *
+            "complex arrays Array{ComplexF64,N}, and String.",
     )
 end
 

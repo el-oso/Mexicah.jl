@@ -28,6 +28,39 @@ end
     @test Mexicah.mx_class_id(Mexicah.ComplexFloat64Marshaler()) isa Cint
 end
 
+@testitem "marshaler_for: extended numeric scalars" begin
+    using Mexicah, Test
+    @test Mexicah.marshaler_for(Float32) isa Mexicah.Float32Marshaler
+    @test Mexicah.marshaler_for(Int8) isa Mexicah.Int8Marshaler
+    @test Mexicah.marshaler_for(Int16) isa Mexicah.Int16Marshaler
+    @test Mexicah.marshaler_for(UInt8) isa Mexicah.UInt8Marshaler
+    @test Mexicah.marshaler_for(UInt16) isa Mexicah.UInt16Marshaler
+    @test Mexicah.marshaler_for(UInt32) isa Mexicah.UInt32Marshaler
+    @test Mexicah.mx_class_id(Mexicah.Float32Marshaler()) == Mexicah.mxSINGLE_CLASS
+    @test Mexicah.mx_class_id(Mexicah.UInt8Marshaler()) == Mexicah.mxUINT8_CLASS
+end
+
+@testitem "marshaler_for: dense numeric arrays of any rank/eltype" begin
+    using Mexicah, Test
+    @test Mexicah.marshaler_for(Vector{Float32}) isa Mexicah.DenseArrayMarshaler{Float32, 1}
+    @test Mexicah.marshaler_for(Matrix{Int32}) isa Mexicah.DenseArrayMarshaler{Int32, 2}
+    @test Mexicah.marshaler_for(Array{Float64, 3}) isa Mexicah.DenseArrayMarshaler{Float64, 3}
+    @test Mexicah.marshaler_for(Array{UInt8, 4}) isa Mexicah.DenseArrayMarshaler{UInt8, 4}
+    # Float64 Vector/Matrix keep their dedicated (non-parametric) marshalers
+    @test Mexicah.marshaler_for(Vector{Float64}) isa Mexicah.VectorFloat64Marshaler
+    @test Mexicah.marshaler_for(Matrix{Float64}) isa Mexicah.MatrixFloat64Marshaler
+    @test Mexicah.mx_class_id(Mexicah.DenseArrayMarshaler{Int16, 2}()) == Mexicah.mxINT16_CLASS
+end
+
+@testitem "marshaler_for: complex matrices / N-D" begin
+    using Mexicah, Test
+    @test Mexicah.marshaler_for(Matrix{ComplexF64}) isa Mexicah.ComplexArrayMarshaler{2}
+    @test Mexicah.marshaler_for(Array{ComplexF64, 3}) isa Mexicah.ComplexArrayMarshaler{3}
+    # Vector{ComplexF64} keeps its dedicated marshaler
+    @test Mexicah.marshaler_for(Vector{ComplexF64}) isa Mexicah.ComplexFloat64Marshaler
+    @test Mexicah.mx_class_id(Mexicah.ComplexArrayMarshaler{2}()) == Mexicah.mxDOUBLE_CLASS
+end
+
 # ── Tests requiring MATLAB API symbols in the process ─────────────────────────
 # Tagged :matlab — skipped automatically when MATLAB is not loaded.
 

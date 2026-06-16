@@ -134,6 +134,18 @@ mx_create_numeric_matrix(m::Csize_t, n::Csize_t, classid::Cint, flag::Cint)::MxA
     classid,
     flag,
 )
+# N-dimensional numeric array. `dims` points to `ndim` mwSize (Csize_t) extents.
+# Large-array function → _730 on Windows (see @mxccall730).
+mx_create_numeric_array(ndim::Csize_t, dims::Ptr{Csize_t}, classid::Cint, flag::Cint)::MxArray =
+    @mxccall730 ccall(
+    :mxCreateNumericArray,
+    MxArray,
+    (Csize_t, Ptr{Csize_t}, Cint, Cint),
+    ndim,
+    dims,
+    classid,
+    flag,
+)
 mx_get_data(pa::MxArray)::Ptr{Cvoid} =
     @mxccall ccall(:mxGetData, Ptr{Cvoid}, (MxArray,), pa)
 
