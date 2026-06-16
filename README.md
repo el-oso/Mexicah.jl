@@ -61,6 +61,8 @@ scale_rows([1 2; 3 4], 10)     % → [10 20; 30 40]
 
 Full guide, examples, and reference: see the [documentation](docs/src/index.md).
 
+Planned work and known issues: see [ROADMAP.md](ROADMAP.md).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
