@@ -110,35 +110,24 @@ jobs:
           source-folder: mex
           select-by-folder: test/matlab
 
-      - name: Capture MATLAB fault trace (Linux)
+      # Capture MATLAB's own crash report via -logfile (run-command keeps the
+      # auto-licensing a bare `matlab` invocation lacks). cd to the workspace so
+      # any matlab_crash_dump lands somewhere persistent.
+      - name: Run MEX under MATLAB with logfile (Linux diagnostic)
+        if: always() && runner.os == 'Linux'
+        continue-on-error: true
+        uses: matlab-actions/run-command@v3
+        with:
+          startup-options: -logfile ${{ github.workspace }}/mlcrash.log
+          command: cd('${{ github.workspace }}'); addpath('mex'); run('mex/mexicah_setup.m'); disp(add_doubles(3.0,4.0))
+
+      - name: Show MATLAB logfile + crash dump (Linux)
         if: always() && runner.os == 'Linux'
         shell: bash
         run: |
-          set +e
-          WS="${{ github.workspace }}"
-          export HOME="$RUNNER_TEMP/mlhome"; mkdir -p "$HOME/Documents/MATLAB"
-          ulimit -c unlimited || true
-          sudo sysctl -w kernel.core_pattern="$RUNNER_TEMP/core.%e.%p" || true
-          cd "$RUNNER_TEMP"
-          CMD="addpath('$WS/mex'); run('$WS/mex/mexicah_setup.m'); disp(add_doubles(3.0,4.0))"
-
-          echo "=== run 1: direct matlab -batch (writable HOME -> crash dump) ==="
-          matlab -batch "$CMD"; echo "matlab exit: $?"
-          echo "=== crash dumps (MATLAB's own symbolized fault stack) ==="
-          DUMPS=$(find "$HOME" "$RUNNER_TEMP" /tmp "$WS" -maxdepth 3 -name 'matlab_crash_dump*' 2>/dev/null)
-          [ -z "$DUMPS" ] && echo "(none)"
-          for f in $DUMPS; do echo "----- $f -----"; cat "$f"; done
-
-          echo "=== run 2: under gdb to get the native backtrace ==="
-          printf 'set pagination off\nrun\nbt\nthread apply all bt\nquit\n' > "$RUNNER_TEMP/gdbcmds"
-          matlab -batch "$CMD" -D"gdb -batch -x $RUNNER_TEMP/gdbcmds --args" 2>&1 | tail -200
-
-          echo "=== core fallback ==="
-          CORE=$(ls -t "$RUNNER_TEMP"/core.* 2>/dev/null | head -1)
-          if [ -n "$CORE" ]; then
-            REAL="$(dirname "$(dirname "$(readlink -f "$(command -v matlab)")")")/bin/glnxa64/MATLAB"
-            gdb -batch -ex 'thread apply all bt' "$REAL" "$CORE" 2>&1 | head -200
-          else
-            echo "(no core)"
-          fi
-          exit 0
+          echo "=== mlcrash.log ==="
+          sed -n '1,300p' "${{ github.workspace }}/mlcrash.log" 2>/dev/null || echo "(no logfile)"
+          echo "=== crash dumps ==="
+          found=$(find "${{ github.workspace }}" "$HOME" "$RUNNER_TEMP" /tmp -maxdepth 3 -name 'matlab_crash_dump*' 2>/dev/null)
+          [ -z "$found" ] && echo "(none)"
+          for f in $found; do echo "----- $f -----"; cat "$f"; done
