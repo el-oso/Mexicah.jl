@@ -1,62 +1,62 @@
-# CLI Reference
+# The `mexicah` CLI
 
-The `mexicah` command-line tool is a compiled Julia app (`juliac --output-exe`)
-for building MEX files without opening a Julia REPL.
+`mexicah` is a Julia 1.12 **app** — a small command-line tool that compiles a
+package's `@mexfunction`s into MATLAB MEX files without opening a Julia REPL. It
+calls [`build_shared_mex`](../guide/quickstart.md) under the hood.
 
-## Building the CLI
+## Install
 
 ```bash
-juliac --output-exe mexicah --trim=safe app/cli.jl
+julia -e 'using Pkg; Pkg.Apps.add("Mexicah")'
 ```
 
-Place the resulting `mexicah` binary on your `PATH`.
+This installs a `mexicah` launcher into `~/.julia/bin`. Add that to your `PATH`
+(the same directory `juliac` lives in):
 
-## Commands
-
-### `mexicah compile`
-
-```
-mexicah compile <package> [options]
+```bash
+export PATH="$HOME/.julia/bin:$PATH"
+mexicah help
 ```
 
-Compile the selected `@mexfunction`s from `<package>` into one shared library
-plus a thin gateway MEX per function — the same as `build_shared_mex`, so the
-results share one Julia runtime and can be used together in a MATLAB session.
+> Developing Mexicah from a local checkout? Use
+> `julia -e 'using Pkg; Pkg.Apps.develop(path=".")'` instead.
 
-`<package>` must be a **loadable Julia package** whose functions are annotated
-with `@mexfunction`. `juliac` compiles in a separate process and cannot see
-functions defined only in a script or the REPL.
+## Usage
 
-#### Options
+```
+mexicah compile <Package> [options]
+mexicah help
+```
+
+Compiles the selected functions into **one** shared library plus a thin gateway
+MEX per function, so they share a single Julia runtime and can be used together
+in one MATLAB session.
+
+`<Package>` must be a loadable Julia package whose functions are annotated with
+`@mexfunction`. The compilation project must depend on both Mexicah and
+`<Package>`; by default that is the current directory (override with
+`--project`).
+
+### Options
 
 | Option | Default | Description |
 |---|---|---|
-| `--function <names>` | — | Comma-separated function names to compile. Required unless `--all-exported`. |
+| `--all-exported` | off | Compile every `@mexfunction` the package registers. |
+| `--function <f1,f2>` | — | Comma-separated function names (instead of `--all-exported`). |
 | `--output <dir>` | `./mex/` | Output directory for the gateways, shared library, and bundle. |
-| `--all-exported` | off | Compile every function registered via `@mexfunction`. |
-| `--no-trim` | off | Disable `juliac --trim=safe`. Produces larger but more permissive binaries. |
+| `--project <dir>` | `.` | Project containing Mexicah and `<Package>`. |
 | `--juliac <path>` | `juliac` | Path to the juliac binary. |
 
-#### Examples
+### Examples
 
 ```bash
-# Every @mexfunction-annotated function in the package
-mexicah compile MySolvers --all-exported --output ./mex/
+# From inside your project (it depends on Mexicah and MySolvers):
+mexicah compile MySolvers --all-exported
 
-# Just a couple of them
-mexicah compile MySolvers --function add_doubles,scale_rows --output ./mex/
+# Just two functions, to a custom directory:
+mexicah compile MySolvers --function add_doubles,scale_rows --output build/mex
 ```
 
-### `mexicah help`
-
-Print usage information.
-
-## Functions must be registered
-
-Only functions annotated with `@mexfunction` (or registered via
-`Mexicah._register_mex_export`) carry type signature metadata. The CLI reads
-this metadata to know what concrete types to use for argument marshaling.
-
-If you need to compile an existing function without `@mexfunction`, use
-`build_mex` from the Julia API and pass `input_types` and `output_types`
-explicitly.
+The result is the same `mex/` bundle as the [Quickstart](../guide/quickstart.md):
+copy it to your MATLAB machine, `run('mex/mexicah_setup.m')`, and call the
+functions.

@@ -13,13 +13,14 @@ julia --project=test -e 'using Mexicah, ReTestItems; runtests(Mexicah; name=r"ma
 julia --project=docs docs/make.jl
 
 # Format all source files (run before every commit)
-runic -i src/ ext/ app/ test/ docs/make.jl
+runic -i src/ ext/ test/ docs/make.jl
 
 # Instantiate test environment (first time)
 julia --project=test -e 'using Pkg; Pkg.instantiate()'
 
-# Build the CLI app (requires juliac on PATH)
-juliac --output-exe mexicah --trim=safe app/cli.jl
+# The `mexicah` CLI is a Julia 1.12 app (Project.toml [apps]); run it directly:
+julia -m Mexicah help
+# or install the launcher: julia -e 'using Pkg; Pkg.Apps.develop(path=".")'
 ```
 
 ## Architecture
@@ -37,7 +38,8 @@ juliac --output-exe mexicah --trim=safe app/cli.jl
 | `cuda_driver.jl` | Raw `libcuda` ccall wrappers (`_cu_*`, `_cuda_init_once!`) for the GPU MEX runtime — no CUDA.jl dependency |
 | `cuda_codegen.jl` | `generate_cuda_mex_source(...)` — GPU MEX wrapper embedding PTX; `_parse_ptx_entry` |
 | `build.jl` | `build_mex(...)` + `_compile_generated_source(...)` — juliac subprocess pipeline; `_write_setup_m` |
-| `macros.jl` | `@mexfunction`, `@mexgradient`, `_MEX_EXPORTS` registry, `build_all_mex` |
+| `macros.jl` | `@mexfunction`, `@mexgradient`, `@mexgpukernel`, `_MEX_EXPORTS` registry, `build_all_mex` |
+| `cli.jl` | `mexicah` CLI app — `Base.@main` + `_cli_run`; `[apps.mexicah]` in Project.toml |
 
 Extensions in `ext/`:
 - `MexicahDataFramesExt.jl` — handle-based DataFrame lifecycle + value conversion via MATLAB struct arrays

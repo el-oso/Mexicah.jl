@@ -14,6 +14,7 @@ include("cuda_codegen.jl")
 include("build.jl")
 include("macros.jl")
 include("linalg.jl")
+include("cli.jl")
 
 export build_mex,
     build_all_mex,
