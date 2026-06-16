@@ -1,10 +1,11 @@
+```@raw html
 ---
 layout: home
 
 hero:
-  name: "Mexicah.jl"
-  text: "Julia functions → MATLAB MEX"
-  tagline: "Compile your Julia code into native MATLAB extensions. No Julia install on the user's machine."
+  name: Mexicah.jl
+  text: Julia functions → MATLAB MEX
+  tagline: Compile a typed Julia function into a native MATLAB extension. Your MATLAB users just call it — no Julia install, no toolchain, no MATLAB needed to build.
   actions:
     - theme: brand
       text: Get Started
@@ -17,72 +18,83 @@ hero:
       link: /examples/
 
 features:
-  - icon: 📦
-    title: No Julia at runtime
-    details: The MEX bundle ships its own libjulia. Your MATLAB users just call the function — they never install Julia.
-  - icon: 🛠️
-    title: No MATLAB at build time
-    details: Build with Julia 1.12+ and a C compiler. No MATLAB, no headers, no toolbox licenses to compile.
-  - icon: ⚡
-    title: Zero-copy arrays
-    details: Array inputs are read straight from MATLAB's buffers — no copy in, one copy out.
-  - icon: 🧩
-    title: Batteries included
-    details: Enzyme/ForwardDiff gradients, ModelingToolkit ODEs, DataFrames, JuMP, LinearAlgebra, and CUDA GPU kernels.
+  - title: No Julia at runtime
+    icon: 📦
+    details: "The MEX bundle ships its own libjulia. Your MATLAB users just call the function — they never install Julia."
+  - title: No MATLAB at build time
+    icon: 🛠️
+    details: "Build with Julia 1.12+ and a C compiler. No MATLAB, no headers, no toolbox licenses to compile."
+  - title: Zero-copy arrays
+    icon: ⚡
+    details: "Array inputs are read straight from MATLAB's buffers — no copy in, one copy out."
+  - title: Batteries included
+    icon: 🧩
+    details: "Enzyme/ForwardDiff gradients, ModelingToolkit ODEs, DataFrames, JuMP, LinearAlgebra, and CUDA GPU kernels."
 ---
+```
 
-# What is Mexicah?
+## What is Mexicah.jl?
 
 Mexicah compiles a typed Julia function into a native MATLAB **MEX** file
-(`.mexa64` / `.mexw64` / `.mexmaca64`) that MATLAB calls like any built-in. The
-heavy lifting is done by Julia's ahead-of-time compiler (`juliac`); Mexicah
-generates the marshaling glue and a tiny loader so the result drops cleanly into
-MATLAB.
-
-> **Pronunciation:** *meh-SHEE-kah* — after the Mexica of central Mexico.
-> The name unpacks to *Matrix-Laboratory EXecutable Interop: Compiled, AOT, Host-free.*
-
-## A 30-second taste
-
-Write a typed function in a small Julia package:
+(`.mexa64` / `.mexw64` / `.mexmaca64`) that MATLAB calls like any built-in. You
+write plain Julia, mark the functions you want to expose, and run one command to
+get MEX files — a self-contained bundle that needs no Julia on the user's machine.
 
 ```julia
+# In a small package — juliac compiles from disk, so functions live in a module.
 module MySolvers
 using Mexicah
 
 @mexfunction function add_doubles(x::Float64, y::Float64)::Float64
     return x + y
 end
+
+@mexfunction function scale_rows(A::Matrix{Float64}, s::Float64)::Matrix{Float64}
+    return A .* s
+end
 end
 ```
 
-Build it (from a project that has both `Mexicah` and `MySolvers`):
-
 ```julia
 using Mexicah, MySolvers
-build_shared_mex([(MySolvers.add_doubles, Type[Float64, Float64], Type[Float64])];
-                 output = "mex/")
+build_shared_mex(
+    [
+        (MySolvers.add_doubles, Type[Float64, Float64], Type[Float64]),
+        (MySolvers.scale_rows,  Type[Matrix{Float64}, Float64], Type[Matrix{Float64}]),
+    ];
+    output = "mex/",
+)
 ```
-
-Call it in MATLAB:
 
 ```matlab
-run('mex/mexicah_setup.m')   % once per session
-add_doubles(3, 4)            % ans = 7
+run('mex/mexicah_setup.m')        % once per session — no Julia on this machine
+add_doubles(3, 4)                 % ans = 7
+scale_rows([1 2; 3 4], 10)        % ans = [10 20; 30 40]
 ```
 
-That's the whole loop. The [Quickstart](guide/quickstart.md) walks through it
-step by step, and [Installation](guide/installation.md) covers the one-time setup.
+## How it works
 
-## How it works (one paragraph)
+```
+@mexfunction  ─►  generated Base.@ccallable mexFunction wrappers (Julia, C-ABI)
+              ─►  juliac --output-lib --trim=safe --privatize  ─►  one shared library
+              ─►  a tiny C gateway per function  ─►  add_doubles.mexa64, …
+              ─►  bundle: gateways + shared lib + libjulia runtime
+```
 
-`juliac --trim=safe` compiles your function and a minimal Julia runtime into a
-shared library. Because MATLAB can't load that library as a MEX directly,
-Mexicah ships a **tiny C gateway** as the actual `.mex*` file: MATLAB loads the
-gateway, which loads the Julia library once and forwards the call. Multiple
-functions are compiled into **one** shared library (so they share a single Julia
-runtime and can all be used in the same MATLAB session). See
-[How it runs](guide/runtime.md) for the details.
+MATLAB can't load a raw juliac library as a MEX, so Mexicah ships a **tiny C
+gateway** as each `.mex*`: MATLAB loads the gateway, which loads the shared Julia
+library once and forwards the call. Building several functions together puts them
+in **one** library, so they share a single Julia runtime and work side by side in
+the same MATLAB session. See [How it runs](guide/runtime.md) for the details.
+
+## Get going
+
+- [Installation](guide/installation.md) — one-time setup (Julia, `juliac`, a C compiler).
+- [Quickstart](guide/quickstart.md) — function → MEX → MATLAB in five steps.
+- [Examples](examples/index.md) — scalars, matrices, sparse, AD gradients, ODEs, GPU.
+
+> **Pronunciation:** *meh-SHEE-kah*, after the Mexica of central Mexico —
+> *Matrix-Laboratory EXecutable Interop: Compiled, AOT, Host-free.*
 
 ## Platform support
 
@@ -91,5 +103,5 @@ runtime and can all be used in the same MATLAB session). See
 | Linux (x86-64) | ✅ supported |
 | Windows / macOS | 🚧 in progress |
 
-GPU kernels (NVIDIA, via KernelAbstractions) compile to PTX and run with only
-the NVIDIA driver — see the [GPU example](examples/cuda.md).
+GPU kernels (NVIDIA, via KernelAbstractions) compile to PTX and run with only the
+NVIDIA driver — see the [GPU example](examples/cuda.md).
