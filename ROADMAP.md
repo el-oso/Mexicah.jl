@@ -40,21 +40,33 @@ latent defects, the rest are features and polish.
   macOS `DYLD_LIBRARY_PATH`; `_validate_method` uses `first`, not `only`.
 - **§3:** added the missing `[compat]` bounds (`LinearAlgebra`, `ModelingToolkit`).
 
-## 1. Marshaler coverage (remainders)
+## 1. Marshaler coverage
 
-- **Cell arrays** (heterogeneous; e.g. `Vector{Any}`/tuple → MATLAB cell — needs a
-  design for how Julia heterogeneity maps).
-- **Char/string arrays** (`Vector{String}` → cell of char, or MATLAB `string`).
-- **Sparse for non-`Float64`** element types (logical/complex sparse).
+### Next up (greenlit)
+
+- **Cell arrays.** Map a Julia heterogeneous tuple `Tuple{A,B,…}` → a 1×N MATLAB
+  cell (each element marshaled by its own type), and `Vector{String}` → an N×1
+  cell of char. Use `mxCreateCellMatrix`/`mxGetCell`/`mxSetCell`; the @generated
+  approach (as for structs) unrolls tuple element types at codegen time.
+- **Sparse for non-`Float64`** element types — at least `SparseMatrixCSC{ComplexF64,Int}`
+  (split Pr/Pi over the existing sparse Ir/Jc) and logical sparse; generalize
+  `SparseFloat64Marshaler` over the value type.
+
+### Later
+
+- **Char/string arrays** beyond the `Vector{String}`→cell case (e.g. MATLAB
+  `string` arrays, char matrices).
 - **N-D / matrix struct arrays** (`Matrix{<struct>}`; today only `Vector{<struct>}`
   → N×1).
 
 ## 2. Distribution
 
-- **Register in the General registry.** Blocked: `TypeContracts` is a Git
-  dependency (`[sources]` in `Project.toml`), which the General registry forbids —
-  `TypeContracts` must be registered first and the `[sources]` entry removed.
-  `[compat]` bounds are now in place.
+- **Register in the General registry.** In progress: `TypeContracts` registration
+  was **requested 2026-06-16** and is in General's mandatory 3-day new-package
+  cool-off (clears ~**2026-06-19**). Once it merges, register Mexicah: remove the
+  `[sources]` entry from `Project.toml` (General forbids URL/path deps) and bump
+  the `TypeContracts` `[compat]` to the registered version. `[compat]` bounds are
+  otherwise in place.
 
 ## 3. Testing & tooling
 
@@ -71,7 +83,8 @@ latent defects, the rest are features and polish.
   dynamically at runtime (recursively, per struct field). Fine for `ccall`-bound
   work; revisit only if profiling shows it matters.
 - Add `docs/src/assets/logo.png` + `favicon.ico` (the Vitepress build warns they
-  are missing; needs design assets).
+  are missing). **In progress** — a designer is producing the assets; drop them in
+  and DocumenterVitepress picks them up automatically.
 
 ## 5. GPU follow-ons (deferred — needs a CUDA + MATLAB host)
 
