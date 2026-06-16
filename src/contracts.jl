@@ -51,22 +51,3 @@ end
 # Cell array marshaler — @generated over the element types, same trim-safe pattern.
 @verify CellArrayMarshaler{_CellProbe} trim_compat = true
 @verify StringVectorMarshaler trim_compat = true
-
-# TypeContracts._registry is a mutable Dict that is NOT preserved when a package
-# is loaded from a precompile cache (dict mutations to external modules are not
-# serialized). This function re-populates it so that interface_trait (which uses
-# the dict via a @generated function) returns correct results at runtime.
-function _reinit_registry!()::Cvoid
-    TypeContracts._registry[AbstractMexMarshaler] = TypeContracts.MethodSpecMin[
-        TypeContracts.MethodSpecMin(load, (TypeContracts.Self, MxArray), false),
-        TypeContracts.MethodSpecMin(store!, (TypeContracts.Self, MxArray, Any), false),
-        TypeContracts.MethodSpecMin(create, (TypeContracts.Self, Tuple), false),
-        TypeContracts.MethodSpecMin(mx_class_id, (TypeContracts.Self,), false),
-    ]
-    TypeContracts._registry[AbstractMexExportable] = TypeContracts.MethodSpecMin[
-        TypeContracts.MethodSpecMin(mex_name, (TypeContracts.Self,), false),
-        TypeContracts.MethodSpecMin(input_types, (TypeContracts.Self,), false),
-        TypeContracts.MethodSpecMin(output_types, (TypeContracts.Self,), false),
-    ]
-    return
-end

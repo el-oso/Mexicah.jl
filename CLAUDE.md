@@ -75,7 +75,7 @@ Core src additions:
 - Tests use `@testitem` (ReTestItems.jl). No bare `@testset`. Test files are named `*_test.jl`.
 - Run tests via `julia --project=test test/runtests.jl`, NOT `runtests("test/")`.
 - MATLAB-dependent tests carry `tags = [:matlab]` and are skipped automatically when MATLAB is not loaded.
-- TypeContracts: `_reinit_registry!()` must be called from `__init__()` — the `_registry` dict is not preserved across precompile cache loading.
+- TypeContracts 0.13+: `@contract` emits method definitions serialized into the precompile cache — no `__init__` / re-registration step needed. Do not reference `TypeContracts._registry` or `TypeContracts.MethodSpecMin` (both removed in 0.13).
 - All `store!` methods in `marshaling.jl` use `::Any` as the third argument so `hasmethod` in TypeContracts contracts returns `true` for any marshaler value type.
 - All `create` methods use `::Tuple` (not `::Dims{N}`) for the same reason.
 - `@mexfunction` macro: `_extract_argtypes` uses `Any[]` (not `Expr[]`) because Julia type names in function signatures are `Symbol`s, not `Expr`s.

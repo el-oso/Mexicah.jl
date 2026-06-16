@@ -57,10 +57,4 @@ export build_mex,
     la_chol_solve,
     la_chol_destroy
 
-# Re-populate TypeContracts._registry on every load so that interface_trait
-# works correctly even when loaded from a precompile cache.
-function __init__()
-    return _reinit_registry!()
-end
-
 end
