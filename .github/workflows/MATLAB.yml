@@ -82,20 +82,23 @@ jobs:
         with:
           release: latest
 
-      - name: Put bundled libjulia on the loader path (Unix)
-        if: runner.os != 'Windows'
+      # Linux only. macOS deliberately gets NO DYLD_LIBRARY_PATH: the impl dylib
+      # already finds bundled libjulia via its @loader_path/lib rpaths (see
+      # _fix_impl_rpath), and exporting DYLD_LIBRARY_PATH=mex/lib poisons MATLAB's
+      # OWN startup — it would load our bundled libjulia/LLVM/libc++ instead of
+      # its own and crash before running anything (same failure mpm hit). SIP
+      # strips DYLD_* from the signed MATLAB binary anyway, so it is useless here.
+      - name: Put bundled libjulia on the loader path (Linux)
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           MEX="${{ github.workspace }}/mex"
-          if [ "$RUNNER_OS" = "macOS" ]; then VAR=DYLD_LIBRARY_PATH; else VAR=LD_LIBRARY_PATH; fi
-          echo "$VAR=$MEX:$MEX/lib:$MEX/lib/julia" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$MEX:$MEX/lib:$MEX/lib/julia" >> "$GITHUB_ENV"
           # MATLAB ships an older libstdc++ and forces it ahead of the system's;
           # libjulia/LLVM needs a newer GLIBCXX. Preload the system libstdc++ so
           # the newer one wins (documented MATLAB-MEX workaround).
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            STDCXX=$(gcc -print-file-name=libstdc++.so.6)
-            echo "LD_PRELOAD=$STDCXX" >> "$GITHUB_ENV"
-          fi
+          STDCXX=$(gcc -print-file-name=libstdc++.so.6)
+          echo "LD_PRELOAD=$STDCXX" >> "$GITHUB_ENV"
       - name: Put bundled libjulia on the loader path (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
