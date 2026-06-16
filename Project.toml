@@ -1,6 +1,6 @@
 name = "Mexicah"
 uuid = "28b42ba6-5630-446f-bcf8-82236b20fd10"
-version = "0.15.4"
+version = "0.15.5"
 authors = ["el-oso <el-oso@users.noreply.github.com>"]
 
 [apps]
