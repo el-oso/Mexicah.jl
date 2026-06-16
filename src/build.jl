@@ -93,7 +93,8 @@ function _run_juliac(
     write(generated_jl, src)
     _format_file(generated_jl)
 
-    tmp_lib = joinpath(output, "$(lib_base)_tmp.so")
+    # juliac requires the platform's native library extension (.dll/.dylib/.so).
+    tmp_lib = joinpath(output, "$(lib_base)_tmp.$(_impl_ext())")
     args = String[juliac_bin, "--project", project, "--output-lib", tmp_lib]
     trim && push!(args, "--trim=safe")
     if bundle
@@ -112,7 +113,7 @@ function _run_juliac(
 
     # With `--bundle`, juliac (≥0.3) nests the output library under `<output>/lib/`
     # alongside the bundled libjulia; without it the lib lands flat in `<output>/`.
-    bundled_lib = joinpath(output, "lib", "$(lib_base)_tmp.so")
+    bundled_lib = joinpath(output, "lib", "$(lib_base)_tmp.$(_impl_ext())")
     produced_lib = isfile(bundled_lib) ? bundled_lib : tmp_lib
     isfile(produced_lib) ||
         error("Mexicah: juliac did not produce a library at $(tmp_lib) or $(bundled_lib).")
