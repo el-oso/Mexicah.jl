@@ -485,6 +485,67 @@ struct _StructProbe
     v::Vector{Float64}
 end
 
+# ── Vector of structs ↔ MATLAB N×1 struct array ───────────────────────────────
+# Same per-field scheme as StructMarshaler, but the @generated body wraps it in a
+# runtime loop over the N elements (element index passed to mx_get_field /
+# mx_set_field). create makes an N×1 mxStruct array.
+
+struct StructVectorMarshaler{T} end
+
+@generated function load(::StructVectorMarshaler{T}, pa::MxArray)::Vector{T} where {T}
+    reads = [
+        :(load(marshaler_for($(fieldtype(T, k))), mx_get_field(pa, Csize_t(i - 1), $(string(fieldname(T, k))))))
+            for k in 1:fieldcount(T)
+    ]
+    ctor = T <: NamedTuple ? :($T(($(reads...),))) : :($T($(reads...)))
+    return quote
+        n = Int(mx_get_number_of_elements(pa))
+        out = Vector{$T}(undef, n)
+        @inbounds for i in 1:n
+            out[i] = $ctor
+        end
+        return out
+    end
+end
+
+@generated function store!(::StructVectorMarshaler{T}, pa::MxArray, v::Any)::Cvoid where {T}
+    setters = Any[]
+    for k in 1:fieldcount(T)
+        FT = fieldtype(T, k)
+        nm = string(fieldname(T, k))
+        if FT === String
+            push!(setters, :(mx_set_field!(pa, Csize_t(i - 1), $nm, mx_create_string(getfield(el, $k)))))
+        else
+            push!(
+                setters,
+                quote
+                    let fm = marshaler_for($FT), fv = getfield(el, $k)
+                        fdims = fv isa AbstractArray ? size(fv) : ()
+                        fpa = create(fm, fdims)
+                        store!(fm, fpa, fv)
+                        mx_set_field!(pa, Csize_t(i - 1), $nm, fpa)
+                    end
+                end,
+            )
+        end
+    end
+    return quote
+        arr = v::Vector{$T}
+        @inbounds for i in 1:length(arr)
+            el = arr[i]
+            $(setters...)
+        end
+        return nothing
+    end
+end
+
+@generated function create(::StructVectorMarshaler{T}, dims::Tuple)::MxArray where {T}
+    names = String[string(fieldname(T, k)) for k in 1:fieldcount(T)]
+    return :(mx_create_struct_matrix(Csize_t(dims[1]::Int), Csize_t(1), $names))
+end
+
+mx_class_id(::StructVectorMarshaler)::Cint = mxSTRUCT_CLASS
+
 # ── Dispatch: pick a marshaler for a Julia type ───────────────────────────────
 
 function marshaler_for(@nospecialize(T::Type))
@@ -505,7 +566,7 @@ function marshaler_for(@nospecialize(T::Type))
     T === UInt8 && return UInt8Marshaler()
     T === UInt16 && return UInt16Marshaler()
     T === UInt32 && return UInt32Marshaler()
-    # Dense numeric / complex arrays of any element type and rank
+    # Dense numeric / complex / logical arrays, and Vector-of-struct → struct array
     if T <: Array
         ET = eltype(T)
         ND = ndims(T)
@@ -516,20 +577,25 @@ function marshaler_for(@nospecialize(T::Type))
                 ET === UInt8 || ET === UInt16 || ET === UInt32 || ET === UInt64
             return DenseArrayMarshaler{ET, ND}()
         end
+        ND == 1 && _is_user_struct(ET) && return StructVectorMarshaler{ET}()
     end
-    # A flat struct / NamedTuple → MATLAB struct. Excludes numbers (e.g. Complex),
-    # arrays, and tuples, which are handled above or unsupported.
-    if isstructtype(T) && !(T <: Number) && !(T <: AbstractArray) &&
-            !(T <: Tuple) && fieldcount(T) >= 1
-        return StructMarshaler{T}()
-    end
+    # A flat struct / NamedTuple → 1×1 MATLAB struct.
+    _is_user_struct(T) && return StructMarshaler{T}()
     error(
         "Mexicah: no marshaler for type $T. Supported: real numeric scalars " *
             "(Float64/Float32, Int8/16/32/64, UInt8/16/32/64), Bool, dense numeric " *
             "arrays Array{T,N} of those element types, SparseMatrixCSC{Float64,Int}, " *
-            "complex arrays Array{ComplexF64,N}, and String.",
+            "complex arrays Array{ComplexF64,N}, flat struct/NamedTuple and " *
+            "Vector of such structs, and String.",
     )
 end
+
+# A flat user composite (struct or NamedTuple) we marshal as a MATLAB struct —
+# excludes numbers (e.g. Complex), arrays, tuples, and strings, which are types
+# `isstructtype` also reports true for but that we handle elsewhere.
+_is_user_struct(@nospecialize(T::Type))::Bool =
+    isstructtype(T) && !(T <: Number) && !(T <: AbstractArray) &&
+    !(T <: Tuple) && !(T <: AbstractString) && fieldcount(T) >= 1
 
 # prhs/plhs are the MEX `mxArray *prhs[]` / `mxArray *plhs[]` arrays, i.e.
 # `mxArray**`. Since MxArray == Ptr{Cvoid} is the `mxArray*` handle, these are

@@ -72,7 +72,8 @@ end
     )
     @test occursin("nrhs != 1", src)
     @test occursin("nlhs > 1", src)
-    @test occursin("Matrix{Float64}", src)
+    # arrays render canonically as Array{T,N}
+    @test occursin("Array{Float64, 2}", src)
 end
 
 @testitem "generate_mex_source errors on unsupported types" begin
@@ -95,9 +96,10 @@ end
     using Mexicah, Test
     @test Mexicah._type_literal(Float32) == "Float32"
     @test Mexicah._type_literal(Int16) == "Int16"
-    @test Mexicah._type_literal(Matrix{Float32}) == "Matrix{Float32}"
+    # arrays render in canonical Array{T,N} form (valid source either way)
+    @test Mexicah._type_literal(Matrix{Float32}) == "Array{Float32, 2}"
     @test Mexicah._type_literal(Array{Float64, 3}) == "Array{Float64, 3}"
-    @test Mexicah._type_literal(Matrix{ComplexF64}) == "Matrix{ComplexF64}"
+    @test Mexicah._type_literal(Matrix{ComplexF64}) == "Array{ComplexF64, 2}"
 
     module TestStructMod
     struct Pt
@@ -107,6 +109,8 @@ end
     end
     # user struct is qualified with its defining module
     @test Mexicah._type_literal(TestStructMod.Pt) == "TestStructMod.Pt"
+    # ... including as an array element type (so the generated `import` resolves it)
+    @test Mexicah._type_literal(Vector{TestStructMod.Pt}) == "Array{TestStructMod.Pt, 1}"
     # unsupported element types still error
     @test_throws ErrorException Mexicah._type_literal(ComplexF64)   # complex scalar
     @test_throws ErrorException Mexicah._type_literal(Vector{String})

@@ -12,6 +12,8 @@
 | `SparseMatrixCSC{Float64,Int}` | sparse double | `mxGetIr/Jc/Pr`; nzval zero-copy, indices copied | `mxCreateSparse` + index/value copy |
 | `Array{ComplexF64,N}` (vector / matrix / N-D) | complex double | `mxGetPr`/`mxGetPi` (split real/imag) — copy | `mxCreateDoubleMatrix(mxCOMPLEX)` + split copy |
 | `struct` / `NamedTuple` (flat) | 1×1 `struct` | `mxGetField` per field, recursing | `mxCreateStructMatrix` + `mxSetField` per field |
+| `Vector{<struct>}` | N×1 `struct` array | `mxGetField` per field per element | `mxCreateStructMatrix(N,1)` + `mxSetField` |
+| `Array{Bool,N}` | `logical` array | `mxGetLogicals` — **zero-copy** | `mxCreateLogicalArray` + `copyto!` |
 | `String` | `char` array | `mxGetString` — **copies to Julia heap** | `mxCreateString` — **one allocation** |
 
 The numeric element types are `Float64`, `Float32`, `Int8/16/32/64`, and

@@ -157,20 +157,27 @@ end
 
 # Render `T` as a source-code type expression for the generated MEX, resolvable
 # in its scope (`using Mexicah` + `import <user module>`). `marshaler_for` is the
-# single source of truth for what is supported — it throws for anything else.
+# single source of truth for what is supported — it throws for anything else; this
+# function only renders.
 function _type_literal(T::Type)::String
     marshaler_for(T)   # validates support (throws ErrorException if unsupported)
-    # Qualify via Mexicah (which imports SparseMatrixCSC): the generated MEX
-    # source only does `using Mexicah`, so `SparseArrays` is not in scope there.
+    return _render_type(T)
+end
+
+# Recursive renderer: qualifies user structs with their defining module (so the
+# generated `import <module>` resolves them, including as array element types) and
+# leaves Base/Core types as their printed form.
+function _render_type(T::Type)::String
+    # SparseArrays is not `using`-ed in the generated source; reach it via Mexicah.
     T === SparseMatrixCSC{Float64, Int} && return "Mexicah.SparseMatrixCSC{Float64,Int}"
-    T === String && return "String"   # String is a struct type; handle before the struct branch
-    # A user struct → qualify with its defining module (imported in the generated
-    # source). NamedTuples are a Base type and render as-is.
-    if isstructtype(T) && !(T <: Number) && !(T <: AbstractArray) &&
-            !(T <: Tuple) && !(T <: NamedTuple) && !(T <: AbstractString)
+    T === String && return "String"
+    if T <: Array
+        return "Array{$(_render_type(eltype(T))), $(ndims(T))}"
+    end
+    # A user struct → module-qualified. NamedTuple is a Base type → printed form.
+    if isstructtype(T) && !(T <: Number) && !(T <: Tuple) &&
+            !(T <: NamedTuple) && !(T <: AbstractString)
         return string(nameof(parentmodule(T)), ".", nameof(T))
     end
-    # Numeric scalars, dense/complex arrays, NamedTuple, String: the printed type
-    # is valid source backed by Base/Core, always in scope.
     return string(T)
 end

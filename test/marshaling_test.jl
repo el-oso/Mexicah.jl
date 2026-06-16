@@ -81,6 +81,9 @@ end
     @test Mexicah.marshaler_for(@NamedTuple{a::Float64, n::Int64}) isa
         Mexicah.StructMarshaler
     @test Mexicah.mx_class_id(Mexicah.StructMarshaler{Pt}()) == Mexicah.mxSTRUCT_CLASS
+    # Vector of structs → N×1 MATLAB struct array
+    @test Mexicah.marshaler_for(Vector{Pt}) isa Mexicah.StructVectorMarshaler{Pt}
+    @test Mexicah.mx_class_id(Mexicah.StructVectorMarshaler{Pt}()) == Mexicah.mxSTRUCT_CLASS
     # Not struct-marshaled: Complex scalar (a Number) and Tuple are excluded
     @test_throws ErrorException Mexicah.marshaler_for(ComplexF64)
     @test_throws ErrorException Mexicah.marshaler_for(Tuple{Float64, Int64})

@@ -97,6 +97,11 @@ function logical_not_arr(A::Matrix{Bool})::Matrix{Bool}
     return .!A
 end
 
+# Vector{Stats} in & out — MATLAB N×1 struct array (StructVectorMarshaler)
+function scale_stats(xs::Vector{Stats}, k::Float64)::Vector{Stats}
+    return [Stats(s.mean * k, s.n) for s in xs]
+end
+
 # (function, input types, output types), in build order. The first entry bundles
 # the Julia runtime; the rest reuse it (see build_fixtures.jl).
 const FIXTURES = [
@@ -116,6 +121,7 @@ const FIXTURES = [
     (minmax_vec, Type[Vector{Float64}], Type[Float64, Float64]),
     (stats_total, Type[Stats], Type[Float64]),
     (logical_not_arr, Type[Matrix{Bool}], Type[Matrix{Bool}]),
+    (scale_stats, Type[Vector{Stats}, Float64], Type[Vector{Stats}]),
 ]
 
 end # module MexFixtures

@@ -44,6 +44,7 @@ end
 # Struct marshaler — verified on a concrete fixture struct (its load/store/create
 # are @generated, so this instantiates and scans the generated code).
 @verify StructMarshaler{_StructProbe} trim_compat = true
+@verify StructVectorMarshaler{_StructProbe} trim_compat = true
 
 # TypeContracts._registry is a mutable Dict that is NOT preserved when a package
 # is loaded from a precompile cache (dict mutations to external modules are not

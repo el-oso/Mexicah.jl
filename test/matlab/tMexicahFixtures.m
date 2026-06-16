@@ -102,5 +102,14 @@ classdef tMexicahFixtures < matlab.unittest.TestCase
             L = [true false; false true];
             verifyEqual(tc, logical_not_arr(L), ~L);
         end
+
+        function tScaleStats(tc)            % Vector{struct} ↔ N×1 struct array
+            sa = struct('mean', {2.0, 3.0}, 'n', {1, 2});
+            o = scale_stats(sa, 10.0);
+            verifyEqual(tc, numel(o), 2);
+            verifyEqual(tc, o(1).mean, 20.0, 'AbsTol', 1e-12);
+            verifyEqual(tc, o(2).mean, 30.0, 'AbsTol', 1e-12);
+            verifyEqual(tc, double(o(1).n), 1.0);
+        end
     end
 end
