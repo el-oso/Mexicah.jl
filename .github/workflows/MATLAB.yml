@@ -100,34 +100,44 @@ jobs:
         with:
           release: latest
 
-      # NOTE: non-blocking while the MATLAB-load crash is being fixed. The juliac
-      # lib self-inits its runtime on dlopen (handle-signals=no by default), yet
-      # MATLAB still hard-crashes loading it — a load/symbol or library conflict.
-      # The crash-dump step below captures the exact cause to drive the fix.
-      - uses: matlab-actions/run-tests@v3
-        continue-on-error: true
-        with:
-          source-folder: mex
-          select-by-folder: test/matlab
-
-      # Capture MATLAB's own crash report via -logfile (run-command keeps the
-      # auto-licensing a bare `matlab` invocation lacks). cd to the workspace so
-      # any matlab_crash_dump lands somewhere persistent.
-      - name: Run MEX under MATLAB with logfile (Linux diagnostic)
-        if: always() && runner.os == 'Linux'
-        continue-on-error: true
+      # Each Mexicah MEX embeds its own Julia runtime, and a process can host only
+      # one Julia runtime — so two different Mexicah MEX cannot coexist in one
+      # MATLAB session (run-tests, which loads all fixtures at once, crashes).
+      # Until the shared-runtime redesign (one lib, many entrypoints), validate
+      # each fixture in its OWN fresh MATLAB session via separate run-command
+      # steps. Linux only for now (macOS/Windows builds need more work).
+      - name: MATLAB add_doubles
+        if: runner.os == 'Linux'
         uses: matlab-actions/run-command@v3
         with:
-          startup-options: -logfile ${{ github.workspace }}/mlcrash.log
-          command: cd('${{ github.workspace }}'); addpath('mex'); run('mex/mexicah_setup.m'); disp(add_doubles(3.0,4.0))
-
-      - name: Show MATLAB logfile + crash dump (Linux)
-        if: always() && runner.os == 'Linux'
-        shell: bash
-        run: |
-          echo "=== mlcrash.log ==="
-          sed -n '1,300p' "${{ github.workspace }}/mlcrash.log" 2>/dev/null || echo "(no logfile)"
-          echo "=== crash dumps ==="
-          found=$(find "${{ github.workspace }}" "$HOME" "$RUNNER_TEMP" /tmp -maxdepth 3 -name 'matlab_crash_dump*' 2>/dev/null)
-          [ -z "$found" ] && echo "(none)"
-          for f in $found; do echo "----- $f -----"; cat "$f"; done
+          command: addpath('${{ github.workspace }}/mex'); assert(add_doubles(3.0,4.0)==7.0)
+      - name: MATLAB matrix_scale
+        if: runner.os == 'Linux'
+        uses: matlab-actions/run-command@v3
+        with:
+          command: addpath('${{ github.workspace }}/mex'); assert(isequal(matrix_scale([1 2;3 4],2.0),[2 4;6 8]))
+      - name: MATLAB sparse_fro
+        if: runner.os == 'Linux'
+        uses: matlab-actions/run-command@v3
+        with:
+          command: addpath('${{ github.workspace }}/mex'); assert(abs(sparse_fro(sparse([1 0;0 2]))-sqrt(5))<1e-12)
+      - name: MATLAB complex_conj
+        if: runner.os == 'Linux'
+        uses: matlab-actions/run-command@v3
+        with:
+          command: addpath('${{ github.workspace }}/mex'); v=[1+2i;3-1i]; assert(isequal(complex_conj(v),conj(v)))
+      - name: MATLAB int64_double
+        if: runner.os == 'Linux'
+        uses: matlab-actions/run-command@v3
+        with:
+          command: addpath('${{ github.workspace }}/mex'); assert(int64_double(int64(21))==int64(42))
+      - name: MATLAB int32_double
+        if: runner.os == 'Linux'
+        uses: matlab-actions/run-command@v3
+        with:
+          command: addpath('${{ github.workspace }}/mex'); assert(int32_double(int32(21))==int32(42))
+      - name: MATLAB bool_not
+        if: runner.os == 'Linux'
+        uses: matlab-actions/run-command@v3
+        with:
+          command: addpath('${{ github.workspace }}/mex'); assert(bool_not(true)==false && bool_not(false)==true)
