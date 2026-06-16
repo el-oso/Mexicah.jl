@@ -148,7 +148,9 @@ function _compile_generated_source(
     )
     out_mex = joinpath(output, "$(func_name).$(mex_ext())")
     impl_name = "$(func_name)_impl.$(_impl_ext())"
-    mv(produced_lib, joinpath(output, impl_name); force = true)
+    impl_path = joinpath(output, impl_name)
+    mv(produced_lib, impl_path; force = true)
+    _fix_impl_rpath(impl_path)
     _build_mex_gateway(output, out_mex, impl_name, "mexFunction")
     @info "Mexicah: wrote $out_mex"
     _write_setup_m(output, func_name)
@@ -189,7 +191,9 @@ function build_shared_mex(
         trim = trim, bundle = true, juliac_bin = juliac_bin, project = project,
     )
     impl_name = "$(name)_impl.$(_impl_ext())"
-    mv(produced_lib, joinpath(output, impl_name); force = true)
+    impl_path = joinpath(output, impl_name)
+    mv(produced_lib, impl_path; force = true)
+    _fix_impl_rpath(impl_path)
 
     ext = mex_ext()
     for (_, fname, _, _) in entries
@@ -202,6 +206,30 @@ function build_shared_mex(
 end
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+"""
+    _fix_impl_rpath(impl_path) -> nothing
+
+macOS-only: make the relocated impl library find its bundled `libjulia`.
+
+`juliac --bundle` lays out `<bundle>/lib/<lib>` and `<bundle>/lib/julia/<deps>`,
+and stamps the lib with rpaths `@loader_path/../lib` and `@loader_path/../lib/julia`
+(correct *while the lib sits in `<bundle>/lib`*). We relocate the impl to
+`<bundle>/` next to the gateways, so those rpaths now point one directory too high
+(`<bundle>/../lib`). Add the corrected `@loader_path/lib[/julia]` rpaths so dyld
+resolves `@rpath/...libjulia.dylib`. On Linux `LD_LIBRARY_PATH` papers over this,
+but macOS SIP strips `DYLD_LIBRARY_PATH` from the signed MATLAB process, so the
+rpath must be right. `install_name_tool` invalidates the signature; arm64 macOS
+refuses to load an invalidly-signed dylib, so re-sign ad-hoc afterwards.
+"""
+function _fix_impl_rpath(impl_path::String)::Nothing
+    Sys.isapple() || return nothing
+    for rp in ("@loader_path/lib", "@loader_path/lib/julia")
+        run(ignorestatus(`install_name_tool -add_rpath $rp $impl_path`))
+    end
+    run(ignorestatus(`codesign -s - -f $impl_path`))
+    return nothing
+end
 
 """
     _infer_vector_input(f) -> Type or nothing
