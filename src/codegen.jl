@@ -144,23 +144,21 @@ function _gen_store_stmts(rettypes::Vector{Type})::String
 end
 
 # Render `T` as a source-code type expression for the generated MEX, resolvable
-# in its scope (`using Mexicah` + `import <user module>`). Must accept exactly the
-# types `marshaler_for` supports.
+# in its scope (`using Mexicah` + `import <user module>`). `marshaler_for` is the
+# single source of truth for what is supported — it throws for anything else.
 function _type_literal(T::Type)::String
+    marshaler_for(T)   # validates support (throws ErrorException if unsupported)
     # Qualify via Mexicah (which imports SparseMatrixCSC): the generated MEX
     # source only does `using Mexicah`, so `SparseArrays` is not in scope there.
     T === SparseMatrixCSC{Float64, Int} && return "Mexicah.SparseMatrixCSC{Float64,Int}"
-    T === String && return "String"
-    # Numeric scalars (incl. Bool) and dense numeric/complex arrays: the printed
-    # type is valid source backed by Base/Core, always in scope.
-    (T <: Number || (T <: Array && eltype(T) <: Number)) && return string(T)
-    # NamedTuple is a Base type → its printed form resolves as-is.
-    T <: NamedTuple && return string(T)
+    T === String && return "String"   # String is a struct type; handle before the struct branch
     # A user struct → qualify with its defining module (imported in the generated
-    # source), mirroring how the callee is qualified.
+    # source). NamedTuples are a Base type and render as-is.
     if isstructtype(T) && !(T <: Number) && !(T <: AbstractArray) &&
-            !(T <: Tuple) && fieldcount(T) >= 1
+            !(T <: Tuple) && !(T <: NamedTuple) && !(T <: AbstractString)
         return string(nameof(parentmodule(T)), ".", nameof(T))
     end
-    error("Mexicah codegen: unsupported type $T")
+    # Numeric scalars, dense/complex arrays, NamedTuple, String: the printed type
+    # is valid source backed by Base/Core, always in scope.
+    return string(T)
 end

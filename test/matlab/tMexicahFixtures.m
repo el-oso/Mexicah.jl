@@ -50,5 +50,36 @@ classdef tMexicahFixtures < matlab.unittest.TestCase
             verifyEqual(tc, bool_not(true), false);
             verifyEqual(tc, bool_not(false), true);
         end
+
+        function tFloat32Double(tc)         % Float32 scalar (single)
+            r = float32_double(single(2.5));
+            verifyEqual(tc, r, single(5.0));
+            verifyClass(tc, r, 'single');
+        end
+
+        function tInt16Double(tc)           % Int16 scalar
+            verifyEqual(tc, int16_double(int16(10)), int16(20));
+        end
+
+        function tMatF32Scale(tc)           % Matrix{Float32} (dense non-Float64)
+            verifyEqual(tc, mat_f32_scale(single([1 2; 3 4]), single(2)), ...
+                single([2 4; 6 8]));
+        end
+
+        function tCubeAdd1(tc)              % Array{Float64,3} (rank > 2)
+            A = reshape(double(1:24), 2, 3, 4);
+            verifyEqual(tc, cube_add1(A), A + 1);
+        end
+
+        function tCmatConj(tc)              % Matrix{ComplexF64}
+            M = [1+2i 3-1i; 1i 2];
+            verifyEqual(tc, cmat_conj(M), conj(M), 'AbsTol', 1e-12);
+        end
+
+        function tMakeStats(tc)             % struct output (StructMarshaler)
+            s = make_stats([2.0; 4.0; 6.0]);
+            verifyEqual(tc, s.mean, 4.0, 'AbsTol', 1e-12);
+            verifyEqual(tc, double(s.n), 3.0);
+        end
     end
 end

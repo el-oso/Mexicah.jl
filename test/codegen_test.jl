@@ -68,6 +68,27 @@ end
     )
 end
 
+@testitem "_type_literal: extended numeric / array / struct types" begin
+    using Mexicah, Test
+    @test Mexicah._type_literal(Float32) == "Float32"
+    @test Mexicah._type_literal(Int16) == "Int16"
+    @test Mexicah._type_literal(Matrix{Float32}) == "Matrix{Float32}"
+    @test Mexicah._type_literal(Array{Float64, 3}) == "Array{Float64, 3}"
+    @test Mexicah._type_literal(Matrix{ComplexF64}) == "Matrix{ComplexF64}"
+
+    module TestStructMod
+    struct Pt
+        x::Float64
+        y::Float64
+    end
+    end
+    # user struct is qualified with its defining module
+    @test Mexicah._type_literal(TestStructMod.Pt) == "TestStructMod.Pt"
+    # unsupported element types still error
+    @test_throws ErrorException Mexicah._type_literal(ComplexF64)   # complex scalar
+    @test_throws ErrorException Mexicah._type_literal(Vector{String})
+end
+
 @testitem "generate_mex_source supports String input and output" begin
     using Mexicah, Test
 

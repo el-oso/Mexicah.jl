@@ -117,8 +117,9 @@ jobs:
 
       # All fixtures share ONE juliac library (one Julia runtime), so they can be
       # called together in a single MATLAB session — the real test of the
-      # shared-runtime redesign. Six marshalers in one session, blocking on both
-      # Linux and Windows. (sparse is tested separately — see below.)
+      # shared-runtime redesign. Twelve marshalers in one session (Float64/Float32,
+      # int widths, Bool, Float32 matrix, 3-D array, complex vector/matrix, struct),
+      # blocking on Linux and Windows. (sparse is tested separately — see below.)
       - name: MATLAB fixtures (one session, non-sparse)
         if: runner.os != 'macOS'
         timeout-minutes: 8
@@ -132,7 +133,13 @@ jobs:
             assert(int32_double(int32(21))==int32(42));
             assert(bool_not(true)==false && bool_not(false)==true);
             v=[1+2i;3-1i]; assert(isequal(complex_conj(v),conj(v)));
-            disp('6 marshalers OK in one MATLAB session');
+            assert(float32_double(single(2.5))==single(5.0) && isa(float32_double(single(2.5)),'single'));
+            assert(int16_double(int16(10))==int16(20));
+            assert(isequal(mat_f32_scale(single([1 2;3 4]),single(2)),single([2 4;6 8])));
+            A3=reshape(double(1:24),2,3,4); assert(isequal(cube_add1(A3),A3+1));
+            M=[1+2i 3-1i; 1i 2]; assert(isequal(cmat_conj(M),conj(M)));
+            s=make_stats([2.0;4.0;6.0]); assert(s.mean==4.0 && s.n==3);
+            disp('12 marshalers OK in one MATLAB session');
 
       # macOS: same one-session test as Linux/Windows. The impl dylib carries
       # @loader_path/lib rpaths (see _fix_impl_rpath) so it finds bundled libjulia
@@ -151,7 +158,13 @@ jobs:
             assert(int32_double(int32(21))==int32(42));
             assert(bool_not(true)==false && bool_not(false)==true);
             v=[1+2i;3-1i]; assert(isequal(complex_conj(v),conj(v)));
-            disp('6 marshalers OK in one MATLAB session');
+            assert(float32_double(single(2.5))==single(5.0) && isa(float32_double(single(2.5)),'single'));
+            assert(int16_double(int16(10))==int16(20));
+            assert(isequal(mat_f32_scale(single([1 2;3 4]),single(2)),single([2 4;6 8])));
+            A3=reshape(double(1:24),2,3,4); assert(isequal(cube_add1(A3),A3+1));
+            M=[1+2i 3-1i; 1i 2]; assert(isequal(cmat_conj(M),conj(M)));
+            s=make_stats([2.0;4.0;6.0]); assert(s.mean==4.0 && s.n==3);
+            disp('12 marshalers OK in one MATLAB session');
       - name: macOS crash diagnostics
         if: always() && runner.os == 'macOS'
         shell: bash
