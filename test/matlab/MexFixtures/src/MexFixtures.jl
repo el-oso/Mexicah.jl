@@ -46,6 +46,41 @@ function bool_not(b::Bool)::Bool
     return !b
 end
 
+# Float32 scalar (mxSINGLE)
+function float32_double(x::Float32)::Float32
+    return 2.0f0 * x
+end
+
+# Int16 scalar (a smaller-width integer class)
+function int16_double(n::Int16)::Int16
+    return Int16(2) * n
+end
+
+# Matrix{Float32} — dense non-Float64 array (DenseArrayMarshaler)
+function mat_f32_scale(A::Matrix{Float32}, s::Float32)::Matrix{Float32}
+    return A .* s
+end
+
+# 3-D Float64 array — rank > 2 (DenseArrayMarshaler{Float64,3})
+function cube_add1(A::Array{Float64, 3})::Array{Float64, 3}
+    return A .+ 1.0
+end
+
+# Matrix{ComplexF64} — complex 2-D (ComplexArrayMarshaler{2})
+function cmat_conj(A::Matrix{ComplexF64})::Matrix{ComplexF64}
+    return conj(A)
+end
+
+# Struct output — Julia struct → MATLAB scalar struct (StructMarshaler)
+struct Stats
+    mean::Float64
+    n::Int64
+end
+
+function make_stats(v::Vector{Float64})::Stats
+    return Stats(sum(v) / length(v), length(v))
+end
+
 # (function, input types, output types), in build order. The first entry bundles
 # the Julia runtime; the rest reuse it (see build_fixtures.jl).
 const FIXTURES = [
@@ -56,6 +91,12 @@ const FIXTURES = [
     (int64_double, Type[Int64], Type[Int64]),
     (int32_double, Type[Int32], Type[Int32]),
     (bool_not, Type[Bool], Type[Bool]),
+    (float32_double, Type[Float32], Type[Float32]),
+    (int16_double, Type[Int16], Type[Int16]),
+    (mat_f32_scale, Type[Matrix{Float32}, Float32], Type[Matrix{Float32}]),
+    (cube_add1, Type[Array{Float64, 3}], Type[Array{Float64, 3}]),
+    (cmat_conj, Type[Matrix{ComplexF64}], Type[Matrix{ComplexF64}]),
+    (make_stats, Type[Vector{Float64}], Type[Stats]),
 ]
 
 end # module MexFixtures
