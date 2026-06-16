@@ -111,9 +111,11 @@ jobs:
 
       # All fixtures share ONE juliac library (one Julia runtime), so they can be
       # called together in a single MATLAB session — the real test of the
-      # shared-runtime redesign. All seven marshalers in one session, blocking.
+      # shared-runtime redesign. All seven marshalers in one session, blocking,
+      # on both Linux and Windows.
       - name: MATLAB all fixtures (one session)
-        if: runner.os == 'Linux'
+        if: runner.os != 'macOS'
+        timeout-minutes: 8
         uses: matlab-actions/run-command@v3
         with:
           command: |
@@ -126,21 +128,3 @@ jobs:
             assert(bool_not(true)==false && bool_not(false)==true);
             v=[1+2i;3-1i]; assert(isequal(complex_conj(v),conj(v)));
             disp('all 7 marshalers OK in one MATLAB session');
-
-      # Windows runtime is being brought up (non-blocking). Capture MATLAB's
-      # crash report to a logfile so the fault is diagnosable.
-      - name: MATLAB Windows fault trace (non-blocking)
-        if: runner.os == 'Windows'
-        continue-on-error: true
-        timeout-minutes: 6
-        uses: matlab-actions/run-command@v3
-        with:
-          startup-options: -logfile ${{ github.workspace }}\mlwin.log
-          command: addpath('${{ github.workspace }}/mex'); disp(add_doubles(3.0,4.0))
-      - name: Show Windows MATLAB log
-        if: always() && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          if (Test-Path "${{ github.workspace }}\mlwin.log") {
-            Get-Content "${{ github.workspace }}\mlwin.log"
-          } else { "(no logfile written)" }
