@@ -67,16 +67,21 @@ function _active_project_dir()::String
     return p === nothing ? pkgdir(@__MODULE__) : dirname(p)
 end
 
-"""
-    _compile_generated_source(src, func_name, output; trim, bundle, juliac_bin) -> String
+# Shared-library extension for the juliac implementation library per OS. MATLAB
+# loads the thin gateway (with the .mex* extension); the gateway dlopens this.
+_impl_ext()::String = Sys.iswindows() ? "dll" : Sys.isapple() ? "dylib" : "so"
 
-Write generated Julia `src` to `output/<func_name>_mexgen.jl`, format it, and run
-juliac to produce `output/<func_name>.<mex_ext>`. Shared by the CPU `build_mex`
-path and the GPU `MexicahCUDAExt` path so the juliac invocation lives in one place.
 """
-function _compile_generated_source(
+    _run_juliac(src, lib_base, output; trim, bundle, juliac_bin, project) -> String
+
+Write generated Julia `src` to `output/<lib_base>_mexgen.jl`, format it, run
+juliac, and return the path to the produced shared library. Shared by the
+single-function, shared, and GPU build paths so the juliac invocation lives in
+one place. `project` must contain both Mexicah and the user's module(s).
+"""
+function _run_juliac(
         src::String,
-        func_name::Symbol,
+        lib_base::String,
         output::String;
         trim::Bool = true,
         bundle::Bool = true,
@@ -84,22 +89,11 @@ function _compile_generated_source(
         project::String = pkgdir(@__MODULE__),
     )::String
     mkpath(output)
-
-    generated_jl = joinpath(output, "$(func_name)_mexgen.jl")
+    generated_jl = joinpath(output, "$(lib_base)_mexgen.jl")
     write(generated_jl, src)
-
     _format_file(generated_jl)
 
-    ext = mex_ext()
-    out_mex = joinpath(output, "$(func_name).$ext")
-    tmp_lib = joinpath(output, "$(func_name)_tmp.so")
-
-    # juliac runs as a separate process and resolves `using Mexicah` / the user's
-    # `import <Module>` from `project`. For the CPU build_mex path this is the
-    # caller's active project (has Mexicah + the user module); the GPU path leaves
-    # the default = Mexicah's own project (CUDA/KernelAbstractions are weak deps
-    # there, so the PTX-embedding wrapper never drags a Julia GPU stack into the
-    # trimmed MEX).
+    tmp_lib = joinpath(output, "$(lib_base)_tmp.so")
     args = String[juliac_bin, "--project", project, "--output-lib", tmp_lib]
     trim && push!(args, "--trim=safe")
     if bundle
@@ -111,34 +105,91 @@ function _compile_generated_source(
     end
     push!(args, generated_jl)
 
-    @info "Mexicah: compiling $(func_name) with juliac…"
+    @info "Mexicah: compiling $(lib_base) with juliac…"
     run(Cmd(args))
 
     # With `--bundle`, juliac (≥0.3) nests the output library under `<output>/lib/`
     # alongside the bundled libjulia; without it the lib lands flat in `<output>/`.
-    bundled_lib = joinpath(output, "lib", "$(func_name)_tmp.so")
+    bundled_lib = joinpath(output, "lib", "$(lib_base)_tmp.so")
     produced_lib = isfile(bundled_lib) ? bundled_lib : tmp_lib
     isfile(produced_lib) ||
         error("Mexicah: juliac did not produce a library at $(tmp_lib) or $(bundled_lib).")
+    return produced_lib
+end
 
-    if Sys.iswindows()
-        # Windows gateway not implemented yet; ship the juliac lib directly.
-        mv(produced_lib, out_mex; force = true)
-    else
-        # MATLAB will not cleanly load a raw juliac library as a MEX. Ship a tiny
-        # C gateway as the .mex* file: MATLAB loads it as a normal MEX, and on the
-        # first call it dlopens the juliac library (RTLD_GLOBAL, so its runtime
-        # initializes and libjulia symbols are visible) and forwards the call.
-        impl_ext = Sys.isapple() ? "dylib" : "so"
-        impl_name = "$(func_name)_impl.$(impl_ext)"
-        mv(produced_lib, joinpath(output, impl_name); force = true)
-        _build_mex_gateway(output, out_mex, impl_name)
-    end
+"""
+    _compile_generated_source(src, func_name, output; trim, bundle, juliac_bin, project) -> String
+
+Compile a single-`mexFunction` source into `output/<func_name>.<mex_ext>`: build
+the juliac implementation library, then a thin C gateway that MATLAB loads.
+Shared by the CPU `build_mex` path and the GPU `MexicahCUDAExt` path.
+"""
+function _compile_generated_source(
+        src::String,
+        func_name::Symbol,
+        output::String;
+        trim::Bool = true,
+        bundle::Bool = true,
+        juliac_bin::String = "juliac",
+        project::String = pkgdir(@__MODULE__),
+    )::String
+    produced_lib = _run_juliac(
+        src, string(func_name), output;
+        trim = trim, bundle = bundle, juliac_bin = juliac_bin, project = project,
+    )
+    out_mex = joinpath(output, "$(func_name).$(mex_ext())")
+    impl_name = "$(func_name)_impl.$(_impl_ext())"
+    mv(produced_lib, joinpath(output, impl_name); force = true)
+    _build_mex_gateway(output, out_mex, impl_name, "mexFunction")
     @info "Mexicah: wrote $out_mex"
-
     _write_setup_m(output, func_name)
-
     return out_mex
+end
+
+"""
+    build_shared_mex(funcs; output, name, trim, juliac_bin, project) -> String
+
+Compile several functions into ONE juliac library exporting a separate entry per
+function, plus one thin gateway MEX per function. All gateways dlopen the single
+shared library, so the Julia runtime initializes exactly once — which lets the
+resulting MEX files be called together in one MATLAB session (unlike one
+juliac library per function, where each would start its own runtime and conflict).
+
+`funcs` is a vector of `(f, input_types, output_types)` tuples. Writes
+`output/<name>_impl.<ext>`, `output/<fname>.<mex_ext>` for each function, and
+`output/mexicah_setup.m`.
+"""
+function build_shared_mex(
+        funcs::Vector;
+        output::String = ".",
+        name::Symbol = :mexicah_shared,
+        trim::Bool = true,
+        juliac_bin::String = "juliac",
+        project::String = _active_project_dir(),
+    )::String
+    entries = Tuple{Module, Symbol, Vector{Type}, Vector{Type}}[]
+    for (f, intypes, outtypes) in funcs
+        it = Vector{Type}(intypes)
+        _validate_method(f, it)
+        push!(entries, (parentmodule(f), nameof(f), it, Vector{Type}(outtypes)))
+    end
+
+    src = generate_shared_mex_source(entries)
+    produced_lib = _run_juliac(
+        src, string(name), output;
+        trim = trim, bundle = true, juliac_bin = juliac_bin, project = project,
+    )
+    impl_name = "$(name)_impl.$(_impl_ext())"
+    mv(produced_lib, joinpath(output, impl_name); force = true)
+
+    ext = mex_ext()
+    for (_, fname, _, _) in entries
+        out_mex = joinpath(output, "$(fname).$ext")
+        _build_mex_gateway(output, out_mex, impl_name, string(_entry_symbol(fname)))
+        @info "Mexicah: wrote $out_mex"
+    end
+    _write_setup_m(output, name)
+    return output
 end
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -183,33 +234,65 @@ function _format_file(path::String)::Cvoid
     return
 end
 
-# Compile the POSIX C gateway MEX (`out_mex`) that, on first call, dlopens the
-# juliac implementation library `impl_name` (a sibling file) and forwards the
-# MEX call to it. Uses only libc/libdl — no MATLAB headers — so the build stays
-# toolchain-light (just a C compiler).
-function _build_mex_gateway(output::String, out_mex::String, impl_name::String)::Cvoid
-    cc = something(Sys.which("cc"), Sys.which("gcc"), "cc")
-    csrc = joinpath(output, "mexicah_gateway.c")
-    write(csrc, _gateway_c_source(impl_name))
-    cmd = String[cc, "-shared", "-fPIC", "-O2", "-o", out_mex, csrc]
-    Sys.isapple() || push!(cmd, "-ldl")   # dl* live in libc on macOS
-    @info "Mexicah: compiling MEX gateway with $cc…"
+# Compile the thin C gateway MEX (`out_mex`) that, on first call, loads the juliac
+# implementation library `impl_name` (a sibling file) and forwards the MEX call to
+# its `entry` export. Uses only libc/libdl (POSIX) or kernel32 (Windows) — no
+# MATLAB headers — so the build stays toolchain-light (just a C compiler).
+function _build_mex_gateway(
+        output::String, out_mex::String, impl_name::String, entry::String,
+    )::Cvoid
+    base = splitext(basename(out_mex))[1]
+    csrc = joinpath(output, "$(base)_gateway.c")
+    write(csrc, _gateway_c_source(impl_name, entry))
+    if Sys.iswindows()
+        cc = something(Sys.which("gcc"), Sys.which("cc"), "gcc")
+        cmd = String[cc, "-shared", "-O2", "-o", out_mex, csrc]
+    else
+        cc = something(Sys.which("cc"), Sys.which("gcc"), "cc")
+        cmd = String[cc, "-shared", "-fPIC", "-O2", "-o", out_mex, csrc]
+        Sys.isapple() || push!(cmd, "-ldl")   # dl* live in libc on macOS
+    end
+    @info "Mexicah: compiling MEX gateway $(base) ($entry) with $cc…"
     run(Cmd(cmd))
     return
 end
 
-function _gateway_c_source(impl_name::String)::String
+function _gateway_c_source(impl_name::String, entry::String)::String
     return """
     /* AUTO-GENERATED by Mexicah.jl — thin MEX gateway. */
+    #ifndef _WIN32
     #define _GNU_SOURCE
-    #include <dlfcn.h>
-    #include <string.h>
+    #endif
     #include <stdio.h>
+    #include <string.h>
     #include <stddef.h>
+    #ifdef _WIN32
+    #include <windows.h>
+    #else
+    #include <dlfcn.h>
+    #endif
 
     typedef void (*mexfn_t)(int, void **, int, void **);
-    static mexfn_t g_impl = NULL;
+    static mexfn_t g_impl = 0;
 
+    #ifdef _WIN32
+    static void mexicah_load(void) {
+        char path[32768];
+        HMODULE self = 0;
+        GetModuleHandleExA(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            (LPCSTR)(void *)&mexicah_load, &self);
+        DWORD n = GetModuleFileNameA(self, path, (DWORD)sizeof(path));
+        if (n == 0 || n >= sizeof(path)) return;
+        char *bs = strrchr(path, '\\\\');
+        size_t dl = bs ? (size_t)(bs - path) + 1 : 0;
+        snprintf(path + dl, sizeof(path) - dl, "%s", "$(impl_name)");
+        HMODULE h = LoadLibraryA(path);
+        if (!h) { fprintf(stderr, "Mexicah gateway: LoadLibrary(%s) failed\\n", path); return; }
+        g_impl = (mexfn_t)(void *)GetProcAddress(h, "$(entry)");
+        if (!g_impl) fprintf(stderr, "Mexicah gateway: $(entry) missing in %s\\n", path);
+    }
+    #else
     static void mexicah_load(void) {
         Dl_info info;
         char path[8192];
@@ -220,10 +303,14 @@ function _gateway_c_source(impl_name::String)::String
         snprintf(path, sizeof(path), "%.*s%s", (int)dl, self, "$(impl_name)");
         void *h = dlopen(path, RTLD_NOW | RTLD_LOCAL);
         if (!h) { fprintf(stderr, "Mexicah gateway: dlopen(%s): %s\\n", path, dlerror()); return; }
-        g_impl = (mexfn_t)dlsym(h, "mexFunction");
-        if (!g_impl) fprintf(stderr, "Mexicah gateway: mexFunction missing in %s\\n", path);
+        g_impl = (mexfn_t)dlsym(h, "$(entry)");
+        if (!g_impl) fprintf(stderr, "Mexicah gateway: $(entry) missing in %s\\n", path);
     }
+    #endif
 
+    #ifdef _WIN32
+    __declspec(dllexport)
+    #endif
     void mexFunction(int nlhs, void **plhs, int nrhs, void **prhs) {
         if (!g_impl) mexicah_load();
         if (g_impl) g_impl(nlhs, plhs, nrhs, prhs);

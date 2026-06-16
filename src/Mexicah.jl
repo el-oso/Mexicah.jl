@@ -17,6 +17,7 @@ include("linalg.jl")
 
 export build_mex,
     build_all_mex,
+    build_shared_mex,
     mex_ext,
     @mexfunction,
     @mexgradient,

@@ -100,42 +100,22 @@ jobs:
         with:
           release: latest
 
-      # Each Mexicah MEX embeds its own Julia runtime, and a process can host only
-      # one Julia runtime — so two different Mexicah MEX cannot coexist in one
-      # MATLAB session (run-tests, which loads all fixtures at once, crashes).
-      # Until the shared-runtime redesign (one lib, many entrypoints), validate
-      # each fixture in its OWN fresh MATLAB session via separate run-command
-      # steps. Linux only for now (macOS/Windows builds need more work).
-      - name: MATLAB add_doubles
+      # All fixtures share ONE juliac library (one Julia runtime), so they can be
+      # called together in a single MATLAB session — the real test of the
+      # shared-runtime redesign. Six marshalers in one session, blocking.
+      - name: MATLAB all fixtures (one session)
         if: runner.os == 'Linux'
         uses: matlab-actions/run-command@v3
         with:
-          command: addpath('${{ github.workspace }}/mex'); assert(add_doubles(3.0,4.0)==7.0)
-      - name: MATLAB matrix_scale
-        if: runner.os == 'Linux'
-        uses: matlab-actions/run-command@v3
-        with:
-          command: addpath('${{ github.workspace }}/mex'); assert(isequal(matrix_scale([1 2;3 4],2.0),[2 4;6 8]))
-      - name: MATLAB sparse_fro
-        if: runner.os == 'Linux'
-        uses: matlab-actions/run-command@v3
-        with:
-          command: addpath('${{ github.workspace }}/mex'); assert(abs(sparse_fro(sparse([1 0;0 2]))-sqrt(5))<1e-12)
-      - name: MATLAB int64_double
-        if: runner.os == 'Linux'
-        uses: matlab-actions/run-command@v3
-        with:
-          command: addpath('${{ github.workspace }}/mex'); assert(int64_double(int64(21))==int64(42))
-      - name: MATLAB int32_double
-        if: runner.os == 'Linux'
-        uses: matlab-actions/run-command@v3
-        with:
-          command: addpath('${{ github.workspace }}/mex'); assert(int32_double(int32(21))==int32(42))
-      - name: MATLAB bool_not
-        if: runner.os == 'Linux'
-        uses: matlab-actions/run-command@v3
-        with:
-          command: addpath('${{ github.workspace }}/mex'); assert(bool_not(true)==false && bool_not(false)==true)
+          command: |
+            addpath('${{ github.workspace }}/mex');
+            assert(add_doubles(3.0,4.0)==7.0);
+            assert(isequal(matrix_scale([1 2;3 4],2.0),[2 4;6 8]));
+            assert(abs(sparse_fro(sparse([1 0;0 2]))-sqrt(5))<1e-12);
+            assert(int64_double(int64(21))==int64(42));
+            assert(int32_double(int32(21))==int32(42));
+            assert(bool_not(true)==false && bool_not(false)==true);
+            disp('all 6 marshalers OK in one MATLAB session');
       # complex_conj is non-blocking: the cc-compiled gateway is a legacy MEX, so
       # MATLAB hands complex arrays in split (Pr/Pi) storage while the marshaler
       # reads interleaved (mxGetComplexDoubles) and crashes. Needs the gateway to

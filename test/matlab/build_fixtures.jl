@@ -22,15 +22,8 @@ using MexFixtures
 
 const OUT = get(ENV, "MEXICAH_FIXTURE_DIR", "mex")
 
-for (i, (f, intypes, outtypes)) in enumerate(MexFixtures.FIXTURES)
-    build_mex(
-        f;
-        input_types = intypes,
-        output_types = outtypes,
-        name = nameof(f),
-        output = OUT,
-        bundle = (i == 1),
-    )
-end
+# One shared juliac library (single Julia runtime) + one thin gateway MEX per
+# fixture, so the fixtures can be called together in one MATLAB session.
+build_shared_mex(MexFixtures.FIXTURES; output = OUT, name = :mexicah_fixtures)
 
 @info "Mexicah: built $(length(MexFixtures.FIXTURES)) fixtures into $(abspath(OUT))"
