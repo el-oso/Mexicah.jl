@@ -106,7 +106,9 @@ function _run_juliac(
     push!(args, generated_jl)
 
     @info "Mexicah: compiling $(lib_base) with juliac…"
-    run(Cmd(args))
+    # On Windows the juliac launcher is a .cmd/.bat, which CreateProcess can't run
+    # by name — route through `cmd /c` so PATHEXT resolution finds it.
+    run(Sys.iswindows() ? Cmd(vcat(["cmd", "/c"], args)) : Cmd(args))
 
     # With `--bundle`, juliac (≥0.3) nests the output library under `<output>/lib/`
     # alongside the bundled libjulia; without it the lib lands flat in `<output>/`.
