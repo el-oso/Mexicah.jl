@@ -189,18 +189,30 @@ mx_class_id(::SparseFloat64Marshaler)::Cint = mxDOUBLE_CLASS
 
 struct ComplexFloat64Marshaler end
 
+# The cc gateway is a legacy MEX, so MATLAB presents complex arrays in split
+# real/imaginary storage (mxGetPr/mxGetPi). The interleaved mxGetComplexDoubles
+# (R2018a) is not available to a legacy MEX — declaring that API needs MATLAB's
+# headers at build time, which Mexicah deliberately avoids.
 function load(::ComplexFloat64Marshaler, pa::MxArray)::Vector{ComplexF64}
-    ptr = mx_get_complex_doubles(pa)
     n = Int(mx_get_number_of_elements(pa))
-    raw = unsafe_wrap(Array, ptr, 2n; own = false)
-    return reinterpret(ComplexF64, raw)
+    pr = mx_get_pr(pa)
+    pim = mx_get_pi(pa)
+    out = Vector{ComplexF64}(undef, n)
+    @inbounds for k in 1:n
+        im = pim == C_NULL ? 0.0 : unsafe_load(pim, k)
+        out[k] = complex(unsafe_load(pr, k), im)
+    end
+    return out
 end
 
 function store!(::ComplexFloat64Marshaler, pa::MxArray, v::Any)::Cvoid
     vec = v::Vector{ComplexF64}
-    ptr = mx_get_complex_doubles(pa)
-    n = length(vec)
-    GC.@preserve vec unsafe_copyto!(ptr, Ptr{Cdouble}(pointer(vec)), 2n)
+    pr = mx_get_pr(pa)
+    pim = mx_get_pi(pa)
+    @inbounds for k in eachindex(vec)
+        unsafe_store!(pr, real(vec[k]), k)
+        unsafe_store!(pim, imag(vec[k]), k)
+    end
     return
 end
 

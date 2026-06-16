@@ -102,7 +102,7 @@ jobs:
 
       # All fixtures share ONE juliac library (one Julia runtime), so they can be
       # called together in a single MATLAB session — the real test of the
-      # shared-runtime redesign. Six marshalers in one session, blocking.
+      # shared-runtime redesign. All seven marshalers in one session, blocking.
       - name: MATLAB all fixtures (one session)
         if: runner.os == 'Linux'
         uses: matlab-actions/run-command@v3
@@ -115,17 +115,8 @@ jobs:
             assert(int64_double(int64(21))==int64(42));
             assert(int32_double(int32(21))==int32(42));
             assert(bool_not(true)==false && bool_not(false)==true);
-            disp('all 6 marshalers OK in one MATLAB session');
-      # complex_conj is non-blocking: the cc-compiled gateway is a legacy MEX, so
-      # MATLAB hands complex arrays in split (Pr/Pi) storage while the marshaler
-      # reads interleaved (mxGetComplexDoubles) and crashes. Needs the gateway to
-      # declare the R2018a interleaved-complex API — tracked separately.
-      - name: MATLAB complex_conj (non-blocking)
-        if: runner.os == 'Linux'
-        continue-on-error: true
-        uses: matlab-actions/run-command@v3
-        with:
-          command: addpath('${{ github.workspace }}/mex'); v=[1+2i;3-1i]; assert(isequal(complex_conj(v),conj(v)))
+            v=[1+2i;3-1i]; assert(isequal(complex_conj(v),conj(v)));
+            disp('all 7 marshalers OK in one MATLAB session');
 
       # Windows runtime is being brought up (non-blocking). Same six marshalers,
       # one session.
