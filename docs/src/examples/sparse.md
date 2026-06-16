@@ -3,22 +3,41 @@
 Shows how `SparseMatrixCSC{Float64, Int}` is marshaled from MATLAB's
 Compressed Sparse Column format with zero-copy on the non-zero value array.
 
-## Julia source (`examples/sparse_norm.jl`)
+## Julia source
+
+The function lives in the `MexicahExamples` package
+(`examples/src/MexicahExamples.jl`) so juliac can import and compile it:
 
 ```julia
-using Mexicah, SparseArrays
+module MexicahExamples
+using Mexicah
+using SparseArrays: SparseMatrixCSC, nonzeros
 
 @mexfunction function sparse_frobnorm(A::SparseMatrixCSC{Float64, Int})::Float64
-    sqrt(sum(x^2 for x in A.nzval))
+    acc = 0.0
+    for v in nonzeros(A)
+        acc += v * v
+    end
+    return sqrt(acc)
 end
+end
+```
 
-build_mex(sparse_frobnorm; output="mex/")
+and the driver `examples/sparse_norm.jl` builds it:
+
+```julia
+using Mexicah, MexicahExamples
+
+build_shared_mex(
+    [(MexicahExamples.sparse_frobnorm, Type[Mexicah.SparseMatrixCSC{Float64, Int}], Type[Float64])];
+    output = "mex/",
+)
 ```
 
 ## Build
 
 ```bash
-julia --project=. examples/sparse_norm.jl
+julia --project=examples examples/sparse_norm.jl
 ```
 
 ## MATLAB

@@ -2,22 +2,36 @@
 
 Demonstrates zero-copy input and single-copy output for `Matrix{Float64}`.
 
-## Julia source (`examples/matrix_scale.jl`)
+## Julia source
+
+The function lives in the `MexicahExamples` package
+(`examples/src/MexicahExamples.jl`) so juliac can import and compile it:
 
 ```julia
+module MexicahExamples
 using Mexicah
 
 @mexfunction function matrix_scale(A::Matrix{Float64}, s::Float64)::Matrix{Float64}
-    A .* s
+    return A .* s
 end
+end
+```
 
-build_mex(matrix_scale; output="mex/")
+and the driver `examples/matrix_scale.jl` builds it:
+
+```julia
+using Mexicah, MexicahExamples
+
+build_shared_mex(
+    [(MexicahExamples.matrix_scale, Type[Matrix{Float64}, Float64], Type[Matrix{Float64}])];
+    output = "mex/",
+)
 ```
 
 ## Build
 
 ```bash
-julia --project=. examples/matrix_scale.jl
+julia --project=examples examples/matrix_scale.jl
 ```
 
 ## MATLAB

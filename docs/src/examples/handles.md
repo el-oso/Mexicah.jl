@@ -35,10 +35,11 @@ Mexicah._handle_count()             → Int      # number of live handles (for l
 
 ## Example: custom struct
 
-Define a Julia type you want to persist across MEX calls:
+Define a Julia type you want to persist across MEX calls, inside a package module
+(`examples/src/MexicahExamples.jl`) so juliac can compile it:
 
 ```julia
-# examples/handles/solver.jl
+# in module MexicahExamples
 using Mexicah
 
 struct FactoredSystem
@@ -75,14 +76,11 @@ end
 end
 ```
 
-Build all three MEX files:
+The driver `examples/handle_solver.jl` builds all three (via
+`build_shared_mex(MexicahExamples.HANDLES; output="mex/")`):
 
 ```bash
-julia --project=. -e '
-    using Mexicah
-    include("examples/handles/solver.jl")
-    build_all_mex(; output="mex/")
-'
+julia --project=examples examples/handle_solver.jl
 ```
 
 ## MATLAB session

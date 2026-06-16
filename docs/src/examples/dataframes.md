@@ -3,6 +3,15 @@
 The `MexicahDataFramesExt` extension (loaded automatically when `DataFrames` is
 in your environment) bridges Julia `DataFrame`s to MATLAB in two ways:
 
+!!! warning "Illustrative — requires DataFrames"
+    This page demonstrates the `MexicahDataFramesExt` API. DataFrames (and CSV)
+    are large dependencies that may not compile under juliac `--trim=safe`; build
+    from an environment that has them, with the wrappers defined in a package
+    module that depends on DataFrames/CSV directly (not via `Main`). It is not
+    part of the lean, CI-built example set ([scalar](scalar.md) /
+    [matrix](matrix.md) / [sparse](sparse.md) / [linalg](linalg.md) /
+    [handles](handles.md)).
+
 | Strategy | When to use |
 |---|---|
 | **Handle-based** | Large or dynamically-typed DataFrames; MATLAB holds a `uint64` key and calls Julia to query columns |

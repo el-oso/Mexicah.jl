@@ -37,33 +37,34 @@ functions.
 
 ## Example: stateless decompositions
 
+The wrappers live in the `MexicahExamples` package
+(`examples/src/MexicahExamples.jl`), each forwarding to a `Mexicah.la_*` routine:
+
 ```julia
-# examples/linalg.jl
+# in module MexicahExamples
 using Mexicah
 
-@mexfunction function factor_svd(
+@mexfunction function la_svd(
         A::Matrix{Float64},
-)::Tuple{Matrix{Float64}, Vector{Float64}, Matrix{Float64}}
+    )::Tuple{Matrix{Float64}, Vector{Float64}, Matrix{Float64}}
     return Mexicah.la_svd(A)
 end
 
-@mexfunction function solve_ls(
-        A::Matrix{Float64}, b::Vector{Float64}
-)::Vector{Float64}
+@mexfunction function la_solve(A::Matrix{Float64}, b::Vector{Float64})::Vector{Float64}
     return Mexicah.la_solve(A, b)
 end
 
-@mexfunction function eig_symmetric(
-        A::Matrix{Float64},
-)::Tuple{Vector{Float64}, Matrix{Float64}}
-    return Mexicah.la_eig_sym(A)
+@mexfunction function la_det(A::Matrix{Float64})::Float64
+    return Mexicah.la_det(A)
 end
-
-build_all_mex(; output="mex/")
 ```
 
+The driver `examples/linalg.jl` builds them together (the
+`MexicahExamples.LINALG` list also includes `la_inv` and the handle-based LU
+functions below):
+
 ```bash
-julia --project=. examples/linalg.jl
+julia --project=examples examples/linalg.jl
 ```
 
 ```matlab
@@ -71,13 +72,12 @@ addpath('mex/')
 mexicah_setup
 
 A = randn(4, 3);
-[U, s, Vt] = factor_svd(A);    % U is 4×3, s is length-3, Vt is 3×3
+[U, s, Vt] = la_svd(A);    % U is 4×3, s is length-3, Vt is 3×3
 
 b = randn(4, 1);
-x = solve_ls(A, b);             % least-squares solution
+x = la_solve(A, b);         % least-squares solution
 
-S = (A' * A);                   % symmetric positive definite
-[lambda, V] = eig_symmetric(S);
+d = la_det(A' * A);         % determinant of the Gram matrix
 ```
 
 ## Example: handle-based LU (repeated solves)

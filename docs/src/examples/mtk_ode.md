@@ -3,6 +3,14 @@
 Compile the right-hand side and Jacobian of a ModelingToolkit `ODESystem`
 directly into MEX files — no manual function writing required.
 
+!!! warning "Illustrative — requires ModelingToolkit"
+    This page demonstrates `build_mex_from_mtk`. ModelingToolkit is a large
+    dependency and its generated RHS lives in a runtime-generated module, so it
+    may not compile under juliac `--trim=safe`; build it from an environment that
+    has MTK loaded. It is not part of the lean, CI-built example set
+    ([scalar](scalar.md) / [matrix](matrix.md) / [sparse](sparse.md) /
+    [linalg](linalg.md) / [handles](handles.md)).
+
 ## Julia source (`examples/mtk_spring_mass.jl`)
 
 ```julia

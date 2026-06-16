@@ -9,20 +9,41 @@ Compile Julia functions into standalone MATLAB MEX extensions (`.mexa64`,
 ahead-of-time compilation — **no Julia installation required on the end user's
 machine**.
 
+juliac compiles from disk, so your functions live in a small package module:
+
 ```julia
+# MySolvers/src/MySolvers.jl
+module MySolvers
 using Mexicah
 
-@mexfunction function solve_ode(u0::Vector{Float64}, t::Float64)::Vector{Float64}
-    # … your Julia solver …
+@mexfunction function add_doubles(x::Float64, y::Float64)::Float64
+    return x + y
 end
 
-build_mex(solve_ode; output = "./mex/")
+@mexfunction function scale_rows(A::Matrix{Float64}, s::Float64)::Matrix{Float64}
+    return A .* s
+end
+end
+```
+
+```julia
+# build script — run with the project that has Mexicah + MySolvers
+using Mexicah, MySolvers
+
+build_shared_mex(
+    [
+        (MySolvers.add_doubles, Type[Float64, Float64], Type[Float64]),
+        (MySolvers.scale_rows,  Type[Matrix{Float64}, Float64], Type[Matrix{Float64}]),
+    ];
+    output = "mex/",
+)
 ```
 
 ```matlab
-% MATLAB side
+% MATLAB side — no Julia installed on this machine
 run('mex/mexicah_setup.m')
-u = solve_ode([1.0; 0.0], 10.0);
+add_doubles(3, 4)              % → 7
+scale_rows([1 2; 3 4], 10)     % → [10 20; 30 40]
 ```
 
 ## Highlights

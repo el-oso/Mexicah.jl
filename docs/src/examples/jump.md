@@ -4,6 +4,15 @@ The `MexicahJuMPExt` extension (loaded when `JuMP` is in your environment)
 lets MATLAB drive LP and QP optimization problems solved by any JuMP-compatible
 solver. Two usage patterns are supported.
 
+!!! warning "Illustrative — requires JuMP + a solver"
+    This page demonstrates the `MexicahJuMPExt` API. JuMP and a solver are large
+    dependencies that may not compile under juliac `--trim=safe`; build from an
+    environment that has them, with the wrappers defined in a package module (not
+    a script's `Main`, and depending on the solver directly rather than via
+    `Main`). It is not part of the lean, CI-built example set
+    ([scalar](scalar.md) / [matrix](matrix.md) / [sparse](sparse.md) /
+    [linalg](linalg.md) / [handles](handles.md)).
+
 ## Pattern A — Stateless (most common)
 
 Julia creates a model, solves it, and returns arrays. MATLAB never sees the

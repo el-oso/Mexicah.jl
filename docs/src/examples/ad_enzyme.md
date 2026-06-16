@@ -3,6 +3,14 @@
 Export the gradient of any scalar-valued Julia function as a MEX extension
 using Enzyme.jl's reverse-mode AD.
 
+!!! warning "Illustrative — requires Enzyme"
+    This page demonstrates the `@mexgradient` API. Enzyme is a large dependency
+    that may not compile under juliac `--trim=safe`; build it from an environment
+    that has Enzyme loaded, with the objective defined in a package module (not a
+    script's `Main`) so juliac can import it. It is not part of the lean, CI-built
+    example set ([scalar](scalar.md) / [matrix](matrix.md) / [sparse](sparse.md) /
+    [linalg](linalg.md) / [handles](handles.md)).
+
 ## Julia source (`examples/enzyme_gradient.jl`)
 
 ```julia
