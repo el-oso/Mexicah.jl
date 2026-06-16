@@ -61,6 +61,21 @@ end
     @test Mexicah.mx_class_id(Mexicah.ComplexArrayMarshaler{2}()) == Mexicah.mxDOUBLE_CLASS
 end
 
+@testitem "marshaler_for: structs and NamedTuples" begin
+    using Mexicah, Test
+    struct Pt
+        x::Float64
+        y::Float64
+    end
+    @test Mexicah.marshaler_for(Pt) isa Mexicah.StructMarshaler{Pt}
+    @test Mexicah.marshaler_for(@NamedTuple{a::Float64, n::Int64}) isa
+        Mexicah.StructMarshaler
+    @test Mexicah.mx_class_id(Mexicah.StructMarshaler{Pt}()) == Mexicah.mxSTRUCT_CLASS
+    # Not struct-marshaled: Complex scalar (a Number) and Tuple are excluded
+    @test_throws ErrorException Mexicah.marshaler_for(ComplexF64)
+    @test_throws ErrorException Mexicah.marshaler_for(Tuple{Float64, Int64})
+end
+
 # ── Tests requiring MATLAB API symbols in the process ─────────────────────────
 # Tagged :matlab — skipped automatically when MATLAB is not loaded.
 

@@ -40,6 +40,9 @@ end
 @verify DenseArrayMarshaler{Int32, 1} trim_compat = true
 @verify DenseArrayMarshaler{Float32, 3} trim_compat = true
 @verify ComplexArrayMarshaler{2} trim_compat = true
+# Struct marshaler — verified on a concrete fixture struct (its load/store/create
+# are @generated, so this instantiates and scans the generated code).
+@verify StructMarshaler{_StructProbe} trim_compat = true
 
 # TypeContracts._registry is a mutable Dict that is NOT preserved when a package
 # is loaded from a precompile cache (dict mutations to external modules are not

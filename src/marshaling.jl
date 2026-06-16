@@ -392,6 +392,65 @@ end
 
 mx_class_id(::ComplexArrayMarshaler)::Cint = mxDOUBLE_CLASS
 
+# ── Struct / NamedTuple ↔ MATLAB 1×1 struct ───────────────────────────────────
+# A flat Julia struct (or NamedTuple) maps to a scalar MATLAB struct, one field
+# per Julia field. The load/store!/create methods are @generated so the field
+# list is unrolled at compile time (fieldnames/fieldtype reflection happens during
+# code generation, never at runtime) — required for juliac --trim=safe. Each field
+# recurses through marshaler_for, so fields may themselves be scalars, arrays, or
+# nested structs. String fields go through mx_create_string directly (the String
+# marshaler has no create+store! form).
+
+struct StructMarshaler{T} end
+
+@generated function load(::StructMarshaler{T}, pa::MxArray)::T where {T}
+    vals = [
+        :(load(marshaler_for($(fieldtype(T, i))), mx_get_field(pa, Csize_t(0), $(string(fieldname(T, i))))))
+            for i in 1:fieldcount(T)
+    ]
+    return T <: NamedTuple ? :($T(($(vals...),))) : :($T($(vals...)))
+end
+
+@generated function store!(::StructMarshaler{T}, pa::MxArray, v::Any)::Cvoid where {T}
+    stmts = Any[:(s = v::$T)]
+    for i in 1:fieldcount(T)
+        FT = fieldtype(T, i)
+        nm = string(fieldname(T, i))
+        if FT === String
+            push!(stmts, :(mx_set_field!(pa, Csize_t(0), $nm, mx_create_string(getfield(s, $i)))))
+        else
+            push!(
+                stmts,
+                quote
+                    let fm = marshaler_for($FT), fv = getfield(s, $i)
+                        fdims = fv isa AbstractArray ? size(fv) : ()
+                        fpa = create(fm, fdims)
+                        store!(fm, fpa, fv)
+                        mx_set_field!(pa, Csize_t(0), $nm, fpa)
+                    end
+                end,
+            )
+        end
+    end
+    push!(stmts, :(return nothing))
+    return Expr(:block, stmts...)
+end
+
+@generated function create(::StructMarshaler{T}, ::Tuple)::MxArray where {T}
+    names = String[string(fieldname(T, i)) for i in 1:fieldcount(T)]
+    return :(mx_create_struct_matrix(Csize_t(1), Csize_t(1), $names))
+end
+
+mx_class_id(::StructMarshaler)::Cint = mxSTRUCT_CLASS
+
+# A concrete fixture so the contract + trim-compat check can be verified on a
+# real instantiation of the @generated methods (see contracts.jl).
+struct _StructProbe
+    x::Float64
+    n::Int64
+    v::Vector{Float64}
+end
+
 # ── Dispatch: pick a marshaler for a Julia type ───────────────────────────────
 
 function marshaler_for(@nospecialize(T::Type))
@@ -423,6 +482,12 @@ function marshaler_for(@nospecialize(T::Type))
             return DenseArrayMarshaler{ET, ND}()
         end
     end
+    # A flat struct / NamedTuple → MATLAB struct. Excludes numbers (e.g. Complex),
+    # arrays, and tuples, which are handled above or unsupported.
+    if isstructtype(T) && !(T <: Number) && !(T <: AbstractArray) &&
+            !(T <: Tuple) && fieldcount(T) >= 1
+        return StructMarshaler{T}()
+    end
     error(
         "Mexicah: no marshaler for type $T. Supported: real numeric scalars " *
             "(Float64/Float32, Int8/16/32/64, UInt8/16/32/64), Bool, dense numeric " *
@@ -443,7 +508,9 @@ end
 
 function store_result(plhs::Ptr{MxArray}, k::Int, v::T) where {T}
     m = marshaler_for(T)
-    dims = ndims(v) == 0 ? () : size(v)
+    # `v isa AbstractArray ? size(v) : ()` rather than ndims(v): scalars and
+    # structs are not arrays and have no ndims method; struct create ignores dims.
+    dims = v isa AbstractArray ? size(v) : ()
     pa = create(m, dims)
     store!(m, pa, v)
     unsafe_store!(plhs, pa, k)
