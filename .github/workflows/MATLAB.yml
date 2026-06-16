@@ -110,11 +110,35 @@ jobs:
           source-folder: mex
           select-by-folder: test/matlab
 
-      - name: Show MATLAB crash dump (diagnostic)
-        if: always() && runner.os != 'Windows'
+      - name: Capture MATLAB fault trace (Linux)
+        if: always() && runner.os == 'Linux'
         shell: bash
         run: |
-          echo "=== searching for MATLAB crash dumps ==="
-          found=$(find "$HOME" /tmp "$RUNNER_TEMP" "${{ github.workspace }}" -maxdepth 3 -name 'matlab_crash_dump*' 2>/dev/null)
-          if [ -z "$found" ]; then echo "(no crash dump found)"; fi
-          for f in $found; do echo "----- $f -----"; sed -n '1,120p' "$f"; done
+          set +e
+          WS="${{ github.workspace }}"
+          export HOME="$RUNNER_TEMP/mlhome"; mkdir -p "$HOME/Documents/MATLAB"
+          ulimit -c unlimited || true
+          sudo sysctl -w kernel.core_pattern="$RUNNER_TEMP/core.%e.%p" || true
+          cd "$RUNNER_TEMP"
+          CMD="addpath('$WS/mex'); run('$WS/mex/mexicah_setup.m'); disp(add_doubles(3.0,4.0))"
+
+          echo "=== run 1: direct matlab -batch (writable HOME -> crash dump) ==="
+          matlab -batch "$CMD"; echo "matlab exit: $?"
+          echo "=== crash dumps (MATLAB's own symbolized fault stack) ==="
+          DUMPS=$(find "$HOME" "$RUNNER_TEMP" /tmp "$WS" -maxdepth 3 -name 'matlab_crash_dump*' 2>/dev/null)
+          [ -z "$DUMPS" ] && echo "(none)"
+          for f in $DUMPS; do echo "----- $f -----"; cat "$f"; done
+
+          echo "=== run 2: under gdb to get the native backtrace ==="
+          printf 'set pagination off\nrun\nbt\nthread apply all bt\nquit\n' > "$RUNNER_TEMP/gdbcmds"
+          matlab -batch "$CMD" -D"gdb -batch -x $RUNNER_TEMP/gdbcmds --args" 2>&1 | tail -200
+
+          echo "=== core fallback ==="
+          CORE=$(ls -t "$RUNNER_TEMP"/core.* 2>/dev/null | head -1)
+          if [ -n "$CORE" ]; then
+            REAL="$(dirname "$(dirname "$(readlink -f "$(command -v matlab)")")")/bin/glnxa64/MATLAB"
+            gdb -batch -ex 'thread apply all bt' "$REAL" "$CORE" 2>&1 | head -200
+          else
+            echo "(no core)"
+          fi
+          exit 0
