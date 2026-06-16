@@ -76,10 +76,13 @@ mx_get_m(pa::MxArray)::Csize_t = @mxccall ccall(:mxGetM, Csize_t, (MxArray,), pa
 mx_get_n(pa::MxArray)::Csize_t = @mxccall ccall(:mxGetN, Csize_t, (MxArray,), pa)
 mx_get_number_of_elements(pa::MxArray)::Csize_t =
     @mxccall ccall(:mxGetNumberOfElements, Csize_t, (MxArray,), pa)
+# Large-array (64-bit mwSize) accessors → _730 on Windows: the bare names are the
+# obsolete 32-bit symbols there and return garbage dimensions (mxGetM/mxGetN,
+# used by the Float64 Vector/Matrix marshalers, are not versioned and stay bare).
 mx_get_number_of_dimensions(pa::MxArray)::Csize_t =
-    @mxccall ccall(:mxGetNumberOfDimensions, Csize_t, (MxArray,), pa)
+    @mxccall730 ccall(:mxGetNumberOfDimensions, Csize_t, (MxArray,), pa)
 mx_get_dimensions(pa::MxArray)::Ptr{Csize_t} =
-    @mxccall ccall(:mxGetDimensions, Ptr{Csize_t}, (MxArray,), pa)
+    @mxccall730 ccall(:mxGetDimensions, Ptr{Csize_t}, (MxArray,), pa)
 
 # ── Type queries ──────────────────────────────────────────────────────────────
 
