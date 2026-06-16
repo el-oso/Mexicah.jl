@@ -176,6 +176,10 @@ jobs:
           echo "=== impl: rpaths (otool -l) ==="; otool -l "$IMPL" 2>&1 | grep -A2 LC_RPATH
           echo "=== impl: code signature ==="; codesign -dv "$IMPL" 2>&1 | head
           echo "=== gateway otool -L ==="; otool -L "$MEX/add_doubles.mexmaca64" 2>&1 | head
+          echo "=== MATLAB crash dumps (matlab_crash_dump.*) ==="
+          for f in "$HOME"/matlab_crash_dump.* /tmp/matlab_crash_dump.* "${{ github.workspace }}"/matlab_crash_dump.* /private/tmp/matlab_crash_dump.*; do
+            [ -f "$f" ] && { echo "----- $f -----"; sed -n '1,120p' "$f"; }
+          done 2>/dev/null
           echo "=== MATLAB crash reports ==="
           for f in ~/Library/Logs/DiagnosticReports/* /Library/Logs/DiagnosticReports/* /Users/runner/Library/Logs/DiagnosticReports/*; do
             [ -f "$f" ] && { echo "----- $f -----"; sed -n '1,60p' "$f"; }
