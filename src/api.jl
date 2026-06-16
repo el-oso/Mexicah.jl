@@ -3,19 +3,52 @@
 # No headers or stub libraries are needed at build time. MATLAB loads its own
 # libmx/libmex into the process before loading a MEX file.
 #
-# Symbol resolution differs by platform: on Linux/macOS the host process exposes
-# MATLAB's symbols globally, so a bare `ccall(:mxFoo, …)` resolves them. Windows
-# has no global symbol table, so the ccall must name the owning library
-# (`libmx` for mx*, `libmex` for mex*). The `@mxccall` / `@mexccall` macros below
-# inject that library name on Windows and leave the bare symbol on Unix.
+# Symbol resolution differs by platform:
+#   * Linux: the host process exposes MATLAB's symbols globally and `libmx`/`libmex`
+#     still export the *bare* C-API names, so a bare `ccall(:mxFoo, …)` resolves.
+#   * Windows: no global symbol table, so the ccall must name the owning library
+#     (`libmx` for mx*, `libmex` for mex*); the bare names are exported there too.
+#   * macOS: symbols are visible in the default scope, BUT `libmx` exports only the
+#     version-suffixed names (the headers `#define mxCreateDoubleMatrix
+#     mxCreateDoubleMatrix_730` under the 64-bit large-array ABI). The bare aliases
+#     Linux/Windows keep are absent, so a bare `ccall(:mxCreateDoubleMatrix, …)`
+#     fails with "symbol not found" even though `mxGetScalar` (unversioned) works.
+# The `@mxccall` / `@mexccall` macros paper over all three: name the library on
+# Windows, resolve via `_mxsym` (bare → _730 → _800) on macOS, bare on Linux.
 
-# Rewrite a `ccall(:sym, …)` so the target names `lib` on Windows; unchanged on Unix.
+@static if Sys.isapple()
+    # macOS RTLD_DEFAULT == (void*)-2 — search every image already in the process
+    # (MATLAB has loaded libmx/libmex by the time any MEX runs).
+    const _RTLD_DEFAULT = Ptr{Cvoid}(-2 % UInt)
+    # Resolve a MATLAB C-API symbol, accounting for the header-level version
+    # renaming. Try the bare name first, then the 64-bit large-array variants:
+    # `_730` (separate-complex ABI, which our split Pr/Pi marshalers target) and
+    # `_800` (interleaved). Unversioned symbols resolve on the first try.
+    function _mxsym(name::Symbol)::Ptr{Cvoid}
+        s = String(name)
+        for suffix in ("", "_730", "_800", "_700")
+            cand = s * suffix
+            p = ccall(:dlsym, Ptr{Cvoid}, (Ptr{Cvoid}, Cstring), _RTLD_DEFAULT, cand)
+            p == C_NULL || return p
+        end
+        # Nothing matched: return the bare lookup so the ccall raises a clear error.
+        return ccall(:dlsym, Ptr{Cvoid}, (Ptr{Cvoid}, Cstring), _RTLD_DEFAULT, s)
+    end
+end
+
+# Rewrite a `ccall(:sym, …)`: name `lib` on Windows, resolve via `_mxsym` on macOS,
+# leave bare on Linux.
 function _ccall_with_lib(ccall_expr::Expr, lib::String)
     (ccall_expr.head === :call && ccall_expr.args[1] === :ccall) ||
         error("@mxccall/@mexccall expects a `ccall(...)` expression")
-    Sys.iswindows() || return esc(ccall_expr)
     a = collect(ccall_expr.args)
-    a[2] = Expr(:tuple, a[2], lib)   # :mxFoo  ->  (:mxFoo, "libmx")
+    if Sys.iswindows()
+        a[2] = Expr(:tuple, a[2], lib)   # :mxFoo  ->  (:mxFoo, "libmx")
+    elseif Sys.isapple()
+        a[2] = Expr(:call, :_mxsym, a[2])   # :mxFoo  ->  _mxsym(:mxFoo)
+    else
+        return esc(ccall_expr)
+    end
     return esc(Expr(:call, a...))
 end
 macro mxccall(e)
