@@ -68,12 +68,21 @@ latent defects, the rest are features and polish.
 
 ## 2. Distribution
 
-- **Register in the General registry.** In progress: `TypeContracts` registration
-  was **requested 2026-06-16** and is in General's mandatory 3-day new-package
-  cool-off (clears ~**2026-06-19**). Once it merges, register Mexicah: remove the
-  `[sources]` entry from `Project.toml` (General forbids URL/path deps) and bump
-  the `TypeContracts` `[compat]` to the registered version. `[compat]` bounds are
-  otherwise in place.
+- **Register in the General registry.** All AutoMerge criteria are met except one
+  hard blocker: General forbids packages that depend on unregistered packages.
+  `TypeContracts` registration was **requested 2026-06-16** and is in the mandatory
+  3-day new-package cooloff (clears ~**2026-06-19**). Once it merges:
+
+  1. Remove the `[sources]` block from `Project.toml` and `test/Project.toml`.
+  2. Run `julia --project=. -e 'using Pkg; Pkg.update()'` and
+     `julia --project=test -e 'using Pkg; Pkg.update()'` to resolve manifests.
+  3. Commit and push.
+  4. Trigger [Registrator](https://github.com/JuliaRegistries/Registrator.jl)
+     (comment `@JuliaRegistrator register` on a commit in this repo, or use the
+     web UI). The PR will auto-merge after the 3-day new-package cooloff.
+
+  Everything else is already in place: MIT license, upper-bounded `[compat]` for all
+  deps, tests + CI, Documenter, TagBot, CompatHelper, and LLM disclosure in README.
 
 ## 3. Testing & tooling
 
