@@ -763,7 +763,7 @@ end
 
 function create(::StringVectorMarshaler, dims::Tuple)::MxArray
     n = dims[1]::Int
-    return mx_create_cell_matrix(Csize_t(n), Csize_t(1))
+    return mx_create_cell_matrix(Csize_t(1), Csize_t(n))  # 1×n row — MATLAB string-cell convention
 end
 
 mx_class_id(::StringVectorMarshaler)::Cint = mxCELL_CLASS
