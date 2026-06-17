@@ -116,13 +116,13 @@ function _run_juliac(
     base_cmd = Sys.iswindows() ? Cmd(vcat(["cmd", "/c"], args)) : Cmd(args)
     logf = tempname()
     proc = open(logf, "w") do io
-        run(pipeline(ignorestatus(base_cmd); stdout=io, stderr=io))
+        run(pipeline(ignorestatus(base_cmd); stdout = io, stderr = io))
     end
     captured = isfile(logf) ? read(logf, String) : ""
-    rm(logf; force=true)
+    rm(logf; force = true)
     if !success(proc)
         verbose && print(stderr, captured)
-        throw(explain_trim_failure(captured; entry_path=abspath(generated_jl)))
+        throw(explain_trim_failure(captured; entry_path = abspath(generated_jl)))
     end
     verbose && print(captured)
 
@@ -320,10 +320,10 @@ function _build_mex_gateway(
     csrc = joinpath(output, "$(base)_gateway.c")
     write(csrc, _gateway_c_source(impl_name, entry))
     if Sys.iswindows()
-        cc = something(Sys.which("gcc"), Sys.which("cc"), "gcc")
+        cc = something(Sys.which("gcc"), Sys.which("clang"), Sys.which("cc"), "gcc")
         cmd = String[cc, "-shared", "-O2", "-o", out_mex, csrc]
     else
-        cc = something(Sys.which("cc"), Sys.which("gcc"), "cc")
+        cc = something(Sys.which("cc"), Sys.which("gcc"), Sys.which("clang"), "cc")
         cmd = String[cc, "-shared", "-fPIC", "-O2", "-o", out_mex, csrc]
         Sys.isapple() || push!(cmd, "-ldl")   # dl* live in libc on macOS
     end
