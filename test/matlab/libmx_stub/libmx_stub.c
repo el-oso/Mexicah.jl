@@ -73,7 +73,7 @@ typedef mx_stub_t *mxArray;
 static size_t element_size(int classid) {
     switch (classid) {
         case MX_LOGICAL_CLASS: return 1;
-        case MX_CHAR_CLASS:    return 1;
+        case MX_CHAR_CLASS:    return 2;  /* mxChar = uint16_t */
         case MX_INT8_CLASS:    return 1;
         case MX_UINT8_CLASS:   return 1;
         case MX_INT16_CLASS:   return 2;
@@ -225,6 +225,24 @@ mxArray mxCreateCellMatrix(size_t m, size_t n) {
     p->nelems    = m * n;
     p->cells     = (mx_stub_t **)calloc(p->nelems, sizeof(mx_stub_t *));
     return p;
+}
+
+/* M×N char array; elements are uint16_t (mxChar) stored column-major in pr. */
+mxArray mxCreateCharArray(size_t ndim, const size_t *dims) {
+    mx_stub_t *p = alloc_stub();
+    p->classid = MX_CHAR_CLASS;
+    p->ndim    = ndim;
+    p->dims    = (size_t *)malloc(ndim * sizeof(size_t));
+    memcpy(p->dims, dims, ndim * sizeof(size_t));
+    p->m       = ndim >= 1 ? dims[0] : 1;
+    p->n       = ndim >= 2 ? dims[1] : 1;
+    p->nelems  = prod(ndim, dims);
+    p->pr      = calloc(p->nelems, 2);  /* uint16_t per element */
+    return p;
+}
+
+uint16_t *mxGetChars(mxArray pa) {
+    return (uint16_t *)pa->pr;
 }
 
 mxArray mxCreateString(const char *str) {

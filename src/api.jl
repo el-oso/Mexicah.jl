@@ -256,6 +256,15 @@ function mx_create_string(s::String)::MxArray
     return @mxccall ccall(:mxCreateString, MxArray, (Cstring,), s)
 end
 
+function mx_create_char_array(dims::NTuple{2, Int})::MxArray
+    sdims = Csize_t[Csize_t(dims[1]), Csize_t(dims[2])]
+    return @mxccall ccall(:mxCreateCharArray, MxArray, (Csize_t, Ptr{Csize_t}), Csize_t(2), sdims)
+end
+
+function mx_get_chars(pa::MxArray)::Ptr{UInt16}
+    return @mxccall ccall(:mxGetChars, Ptr{UInt16}, (MxArray,), pa)
+end
+
 # ── MEX error / output ────────────────────────────────────────────────────────
 
 mex_errorf(id::AbstractString, msg::AbstractString)::Cvoid =

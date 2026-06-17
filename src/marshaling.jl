@@ -583,7 +583,9 @@ struct StructMarshaler{T} end
 
 @generated function load(::StructMarshaler{T}, pa::MxArray)::T where {T}
     vals = [
-        :(load(marshaler_for($(fieldtype(T, i))), mx_get_field(pa, Csize_t(0), $(string(fieldname(T, i))))))
+        let m = marshaler_for(fieldtype(T, i)), MT = typeof(m)
+                :(load($MT(), mx_get_field(pa, Csize_t(0), $(string(fieldname(T, i))))))
+        end
             for i in 1:fieldcount(T)
     ]
     return T <: NamedTuple ? :($T(($(vals...),))) : :($T($(vals...)))
@@ -593,6 +595,7 @@ end
     stmts = Any[:(s = v::$T)]
     for i in 1:fieldcount(T)
         FT = fieldtype(T, i)
+        FM = typeof(marshaler_for(FT))
         nm = string(fieldname(T, i))
         if FT === String
             push!(stmts, :(mx_set_field!(pa, Csize_t(0), $nm, mx_create_string(getfield(s, $i)))))
@@ -600,10 +603,10 @@ end
             push!(
                 stmts,
                 quote
-                    let fm = marshaler_for($FT), fv = getfield(s, $i)
+                    let fv = getfield(s, $i)
                         fdims = fv isa AbstractArray ? size(fv) : ()
-                        fpa = create(fm, fdims)
-                        store!(fm, fpa, fv)
+                        fpa = create($FM(), fdims)
+                        store!($FM(), fpa, fv)
                         mx_set_field!(pa, Csize_t(0), $nm, fpa)
                     end
                 end,
@@ -638,7 +641,9 @@ struct StructVectorMarshaler{T} end
 
 @generated function load(::StructVectorMarshaler{T}, pa::MxArray)::Vector{T} where {T}
     reads = [
-        :(load(marshaler_for($(fieldtype(T, k))), mx_get_field(pa, Csize_t(i - 1), $(string(fieldname(T, k))))))
+        let m = marshaler_for(fieldtype(T, k)), MT = typeof(m)
+                :(load($MT(), mx_get_field(pa, Csize_t(i - 1), $(string(fieldname(T, k))))))
+        end
             for k in 1:fieldcount(T)
     ]
     ctor = T <: NamedTuple ? :($T(($(reads...),))) : :($T($(reads...)))
@@ -656,6 +661,7 @@ end
     setters = Any[]
     for k in 1:fieldcount(T)
         FT = fieldtype(T, k)
+        FM = typeof(marshaler_for(FT))
         nm = string(fieldname(T, k))
         if FT === String
             push!(setters, :(mx_set_field!(pa, Csize_t(i - 1), $nm, mx_create_string(getfield(el, $k)))))
@@ -663,10 +669,10 @@ end
             push!(
                 setters,
                 quote
-                    let fm = marshaler_for($FT), fv = getfield(el, $k)
+                    let fv = getfield(el, $k)
                         fdims = fv isa AbstractArray ? size(fv) : ()
-                        fpa = create(fm, fdims)
-                        store!(fm, fpa, fv)
+                        fpa = create($FM(), fdims)
+                        store!($FM(), fpa, fv)
                         mx_set_field!(pa, Csize_t(i - 1), $nm, fpa)
                     end
                 end,
@@ -690,6 +696,73 @@ end
 
 mx_class_id(::StructVectorMarshaler)::Cint = mxSTRUCT_CLASS
 
+# ── Matrix of structs ↔ MATLAB M×N struct array ───────────────────────────────
+# Same per-field @generated scheme as StructVectorMarshaler, but the loop index
+# runs over all M×N elements using Julia's column-major linear order, which
+# matches MATLAB struct array linear indexing exactly. create passes both dims.
+
+struct StructMatrixMarshaler{T} end
+
+@generated function load(::StructMatrixMarshaler{T}, pa::MxArray)::Matrix{T} where {T}
+    reads = [
+        :(
+                load(
+                    $(typeof(marshaler_for(fieldtype(T, k))))(),
+                    mx_get_field(pa, Csize_t(idx - 1), $(string(fieldname(T, k)))),
+                )
+            ) for k in 1:fieldcount(T)
+    ]
+    ctor = T <: NamedTuple ? :($T(($(reads...),))) : :($T($(reads...)))
+    return quote
+        m = Int(mx_get_m(pa))
+        n = Int(mx_get_n(pa))
+        out = Matrix{$T}(undef, m, n)
+        @inbounds for idx in 1:(m * n)
+            out[idx] = $ctor
+        end
+        return out
+    end
+end
+
+@generated function store!(::StructMatrixMarshaler{T}, pa::MxArray, v::Any)::Cvoid where {T}
+    setters = Any[]
+    for k in 1:fieldcount(T)
+        FT = fieldtype(T, k)
+        FM = typeof(marshaler_for(FT))
+        nm = string(fieldname(T, k))
+        if FT === String
+            push!(setters, :(mx_set_field!(pa, Csize_t(idx - 1), $nm, mx_create_string(getfield(el, $k)))))
+        else
+            push!(
+                setters,
+                quote
+                    let fv = getfield(el, $k)
+                        fdims = fv isa AbstractArray ? size(fv) : ()
+                        fpa = create($FM(), fdims)
+                        store!($FM(), fpa, fv)
+                        mx_set_field!(pa, Csize_t(idx - 1), $nm, fpa)
+                    end
+                end,
+            )
+        end
+    end
+    return quote
+        mat = v::Matrix{$T}
+        @inbounds for idx in eachindex(mat)
+            el = mat[idx]
+            $(setters...)
+        end
+        return nothing
+    end
+end
+
+@generated function create(::StructMatrixMarshaler{T}, dims::Tuple)::MxArray where {T}
+    names = String[string(fieldname(T, k)) for k in 1:fieldcount(T)]
+    return :(mx_create_struct_matrix(Csize_t(dims[1]::Int), Csize_t(dims[2]::Int), $names))
+end
+
+mx_class_id(::StructMatrixMarshaler)::Cint = mxSTRUCT_CLASS
+
 # ── Tuple{A,B,…} ↔ MATLAB 1×N cell array ────────────────────────────────────
 # A heterogeneous Julia tuple maps to a 1×N MATLAB cell, each element marshaled
 # by its own type. The @generated body unrolls element types at codegen time
@@ -700,7 +773,9 @@ struct CellArrayMarshaler{T} end
 
 @generated function load(::CellArrayMarshaler{T}, pa::MxArray)::T where {T}
     loads = [
-        :(load(marshaler_for($(fieldtype(T, i))), mx_get_cell(pa, Csize_t($(i - 1)))))
+        let m = marshaler_for(fieldtype(T, i)), MT = typeof(m)
+                :(load($MT(), mx_get_cell(pa, Csize_t($(i - 1)))))
+        end
             for i in 1:fieldcount(T)
     ]
     return :(($(loads...),))
@@ -710,13 +785,14 @@ end
     stmts = Any[:(tup = v::$T)]
     for i in 1:fieldcount(T)
         FT = fieldtype(T, i)
+        FM = typeof(marshaler_for(FT))
         push!(
             stmts,
             quote
-                let fm = marshaler_for($FT), fv = getfield(tup, $i)
+                let fv = getfield(tup, $i)
                     fdims = fv isa AbstractArray ? size(fv) : ()
-                    fpa = create(fm, fdims)
-                    store!(fm, fpa, fv)
+                    fpa = create($FM(), fdims)
+                    store!($FM(), fpa, fv)
                     mx_set_cell!(pa, Csize_t($(i - 1)), fpa)
                 end
             end,
@@ -741,6 +817,40 @@ const _CellProbe = Tuple{Float64, Int64}
 # cell is an N×1 mxCELL array. This is the natural MATLAB representation of a
 # string vector: strsplit / string arrays in MATLAB code produce cell arrays of
 # char when passed to older MEX, so this is the compatible representation.
+
+# ── Matrix{Char} ↔ MATLAB M×N char array ─────────────────────────────────────
+# MATLAB char arrays store elements as UTF-16 (mxChar = uint16_t), column-major.
+# Julia Char is a 32-bit Unicode codepoint; BMP characters (U+0000–U+FFFF) round-
+# trip losslessly. Non-BMP characters (U+10000+) are silently truncated to their
+# low 16 bits on store! (consistent with MATLAB's own char type limits).
+
+struct CharMatrixMarshaler end
+
+function load(::CharMatrixMarshaler, pa::MxArray)::Matrix{Char}
+    m = Int(mx_get_m(pa))
+    n = Int(mx_get_n(pa))
+    ptr = mx_get_chars(pa)
+    out = Matrix{Char}(undef, m, n)
+    for i in 1:(m * n)
+        out[i] = Char(unsafe_load(ptr, i))
+    end
+    return out
+end
+
+function store!(::CharMatrixMarshaler, pa::MxArray, v::Any)::Cvoid
+    mat = v::Matrix{Char}
+    ptr = mx_get_chars(pa)
+    for i in eachindex(mat)
+        unsafe_store!(ptr, UInt16(codepoint(mat[i])), i)
+    end
+    return
+end
+
+function create(::CharMatrixMarshaler, dims::Tuple)::MxArray
+    return mx_create_char_array((dims[1]::Int, dims[2]::Int))
+end
+
+mx_class_id(::CharMatrixMarshaler)::Cint = mxCHAR_CLASS
 
 struct StringVectorMarshaler end
 
@@ -803,7 +913,9 @@ function marshaler_for(@nospecialize(T::Type))
             return DenseArrayMarshaler{ET, ND}()
         end
         ET === String && ND == 1 && return StringVectorMarshaler()
+        ET === Char && ND == 2 && return CharMatrixMarshaler()
         ND == 1 && _is_user_struct(ET) && return StructVectorMarshaler{ET}()
+        ND == 2 && _is_user_struct(ET) && return StructMatrixMarshaler{ET}()
     end
     # A heterogeneous Julia Tuple → 1×N MATLAB cell array.
     T <: Tuple && fieldcount(T) >= 1 && return CellArrayMarshaler{T}()
@@ -814,9 +926,10 @@ function marshaler_for(@nospecialize(T::Type))
             "(Float64/Float32, Int8/16/32/64, UInt8/16/32/64), Bool, dense numeric " *
             "arrays Array{T,N} of those element types, " *
             "SparseMatrixCSC{Float64/ComplexF64/Bool,Int}, " *
-            "complex arrays Array{ComplexF64,N}, flat struct/NamedTuple and " *
-            "Vector of such structs, Tuple{...} (→ cell array), " *
-            "Vector{String} (→ cell of char), and String.",
+            "complex arrays Array{ComplexF64,N}, flat struct/NamedTuple, " *
+            "Vector{<struct>} (→ N×1 struct array), Matrix{<struct>} (→ M×N struct array), " *
+            "Tuple{...} (→ cell array), Vector{String} (→ cell of char), " *
+            "Matrix{Char} (→ M×N char array), and String.",
     )
 end
 

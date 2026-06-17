@@ -48,6 +48,8 @@ end
 # are @generated, so this instantiates and scans the generated code).
 @verify StructMarshaler{_StructProbe} trim_compat = true
 @verify StructVectorMarshaler{_StructProbe} trim_compat = true
+@verify StructMatrixMarshaler{_StructProbe} trim_compat = true
 # Cell array marshaler — @generated over the element types, same trim-safe pattern.
 @verify CellArrayMarshaler{_CellProbe} trim_compat = true
 @verify StringVectorMarshaler trim_compat = true
+@verify CharMatrixMarshaler trim_compat = true

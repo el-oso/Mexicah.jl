@@ -5,11 +5,11 @@ feasibility notes, and a code audit (2026-06-16). Ordered by priority within eac
 section; **Section 1 (correctness/robustness) should come first** — those are
 latent defects, the rest are features and polish.
 
-## Status (v0.21.0)
+## Status (v0.22.0)
 
 - End-to-end MATLAB CI is green and blocking on Linux, Windows, and macOS:
   19 asserted fixtures in one session + sparse (including complex and logical), per OS.
-- Full Julia test suite green (76 tests, 236 assertions); docs build clean.
+- Full Julia test suite green (81 tests, 253 assertions); docs build clean.
 - `:matlab`-tagged marshaler round-trips now run in regular CI (without MATLAB) via
   the `libmx_stub.so` preloaded on Linux runners.
 - Marshaler coverage: real-numeric scalars (`Float64/Float32`, `Int8/16/32/64`,
@@ -17,9 +17,22 @@ latent defects, the rest are features and polish.
   type and rank, logical `Array{Bool,N}`, `SparseMatrixCSC{Float64,Int}`,
   `SparseMatrixCSC{ComplexF64,Int}`, `SparseMatrixCSC{Bool,Int}`,
   complex `Array{ComplexF64,N}` **and `Array{ComplexF32,N}`**, flat
-  `struct`/`NamedTuple` (in & out) **and `Vector{<struct>}` ↔ N×1 struct array**,
-  `Tuple{A,B,…}` ↔ 1×N cell array, `Vector{String}` ↔ N×1 cell of char,
+  `struct`/`NamedTuple` (in & out), **`Vector{<struct>}` ↔ N×1 struct array**,
+  **`Matrix{<struct>}` ↔ M×N struct array**, `Tuple{A,B,…}` ↔ 1×N cell array,
+  `Vector{String}` ↔ N×1 cell of char, **`Matrix{Char}` ↔ M×N char array**,
   `String`, `UInt64` handles, and multiple outputs.
+
+## Recently completed (v0.22.0)
+
+- **§1 coverage:** `Matrix{S}` ↔ M×N MATLAB struct array (`StructMatrixMarshaler{T}`);
+  `Matrix{Char}` ↔ M×N MATLAB char array (`CharMatrixMarshaler`). Both tested via
+  the libmx stub with round-trip `:matlab`-tagged tests.
+- **§4 dispatch:** All `@generated` marshaler bodies (`StructMarshaler`,
+  `StructVectorMarshaler`, `StructMatrixMarshaler`, `CellArrayMarshaler`) now
+  resolve field marshalers at **code-generation time** (interpolating the concrete
+  marshaler type into the generated AST) rather than as runtime `marshaler_for`
+  calls. All `load`/`store!` call sites in generated MEX code are now fully
+  type-stable — no `Any`-typed dynamic dispatch in the hot field-iteration paths.
 
 ## Recently completed (v0.21.0)
 
@@ -61,10 +74,11 @@ latent defects, the rest are features and polish.
 
 ### Later
 
-- **Char/string arrays** beyond the `Vector{String}`→cell case (e.g. MATLAB
-  `string` arrays, char matrices).
-- **N-D / matrix struct arrays** (`Matrix{<struct>}`; today only `Vector{<struct>}`
-  → N×1).
+- **MATLAB `string` arrays** (R2016b+ `string` type, `mxSTRING_CLASS`) — distinct
+  from char arrays; requires a different C API and a new stub classid. Deferred.
+- **N-D struct arrays** (`Array{S,N}` for N≥3) — `Vector{S}` (N=1) and `Matrix{S}`
+  (N=2) are done; higher ranks need `mxCreateStructArray` (not just
+  `mxCreateStructMatrix`).
 
 ## 2. Distribution
 
@@ -90,10 +104,6 @@ latent defects, the rest are features and polish.
 
 ## 4. Cleanup & polish
 
-- **Dynamic dispatch in the marshaler hot path** (low priority): `marshaler_for`
-  is `@nospecialize` and returns `Any`, so `load`/`store!`/`create` dispatch
-  dynamically at runtime (recursively, per struct field). Fine for `ccall`-bound
-  work; revisit only if profiling shows it matters.
 - Add `docs/src/assets/logo.png` + `favicon.ico` (the Vitepress build warns they
   are missing). **In progress** — a designer is producing the assets; drop them in
   and DocumenterVitepress picks them up automatically.

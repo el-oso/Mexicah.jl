@@ -109,9 +109,18 @@ end
     # Vector of structs → N×1 MATLAB struct array
     @test Mexicah.marshaler_for(Vector{Pt}) isa Mexicah.StructVectorMarshaler{Pt}
     @test Mexicah.mx_class_id(Mexicah.StructVectorMarshaler{Pt}()) == Mexicah.mxSTRUCT_CLASS
+    # Matrix of structs → M×N MATLAB struct array
+    @test Mexicah.marshaler_for(Matrix{Pt}) isa Mexicah.StructMatrixMarshaler{Pt}
+    @test Mexicah.mx_class_id(Mexicah.StructMatrixMarshaler{Pt}()) == Mexicah.mxSTRUCT_CLASS
     # Not struct-marshaled: Complex scalar (a Number) is excluded;
     # Tuple now routes to CellArrayMarshaler (no longer an error here).
     @test_throws ErrorException Mexicah.marshaler_for(ComplexF64)
+end
+
+@testitem "marshaler_for: Matrix{Char} char matrix" begin
+    using Mexicah, Test
+    @test Mexicah.marshaler_for(Matrix{Char}) isa Mexicah.CharMatrixMarshaler
+    @test Mexicah.mx_class_id(Mexicah.CharMatrixMarshaler()) == Mexicah.mxCHAR_CLASS
 end
 
 # ── Tests requiring MATLAB API symbols in the process ─────────────────────────
@@ -179,4 +188,32 @@ end
         @test Mexicah.load(m, pa) === val
         Mexicah.mx_destroy_array(pa)
     end
+end
+
+@testitem "StructMatrixMarshaler 2×3 round-trip" tags = [:matlab] begin
+    using Mexicah, Test
+    struct GridPt
+        x::Float64
+        y::Float64
+    end
+    m = Mexicah.StructMatrixMarshaler{GridPt}()
+    src = [GridPt(Float64(i + j), Float64(i * j)) for i in 1:2, j in 1:3]
+    pa = Mexicah.create(m, (2, 3))
+    Mexicah.store!(m, pa, src)
+    got = Mexicah.load(m, pa)
+    @test size(got) == (2, 3)
+    @test all(got[i, j] == src[i, j] for i in 1:2, j in 1:3)
+    Mexicah.mx_destroy_array(pa)
+end
+
+@testitem "CharMatrixMarshaler round-trip" tags = [:matlab] begin
+    using Mexicah, Test
+    m = Mexicah.CharMatrixMarshaler()
+    src = ['A' 'B' 'C'; 'D' 'E' 'F']   # 2×3 Matrix{Char}
+    pa = Mexicah.create(m, (2, 3))
+    Mexicah.store!(m, pa, src)
+    got = Mexicah.load(m, pa)
+    @test size(got) == (2, 3)
+    @test got == src
+    Mexicah.mx_destroy_array(pa)
 end
