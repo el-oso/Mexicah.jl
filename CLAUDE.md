@@ -48,7 +48,7 @@ Windows use real MATLAB via `MATLAB.yml`).
 | `types.jl` | `MxArray = Ptr{Cvoid}`, mxClassID constants, `mex_ext()` |
 | `api.jl` | `ccall` wrappers for all MATLAB C API functions (no headers required) |
 | `marshaling.jl` | Zero-copy loaders and writers per Julia type; `marshaler_for`, `load_arg`, `store_result` |
-| `contracts.jl` | `AbstractMexMarshaler` and `AbstractMexExportable` TypeContracts interfaces; `@verify` for all marshalers; `_reinit_registry!` |
+| `contracts.jl` | `AbstractMexMarshaler` and `AbstractMexExportable` TypeContracts interfaces; `@verify` for all marshalers |
 | `runtime.jl` | `_mexicah_init_once()` — atomic init guard for each MEX file |
 | `codegen.jl` | `generate_mex_source(...)` — generates the Julia file passed to juliac |
 | `cuda_driver.jl` | Raw `libcuda` ccall wrappers (`_cu_*`, `_cuda_init_once!`) for the GPU MEX runtime — no CUDA.jl dependency |
@@ -95,6 +95,8 @@ Two platform-dispatch macros wrap every MATLAB C API call:
   function that takes or returns array dimensions or element counts:
   `mxCreateCellMatrix`, `mxGetCell`, `mxSetCell`, `mxCreateSparse`,
   `mxCreateSparseLogicalMatrix`, `mxCreateStructMatrix`, etc.
+  `mxCreateCharArray` also takes `mwSize` dims — use `@mxccall730` if Windows
+  char-matrix tests fail (currently uses `@mxccall`; no Windows CI coverage yet).
 
 ### `marshaler_for` dispatch order (`src/marshaling.jl`)
 
@@ -102,17 +104,40 @@ Order matters — later branches are not reached if an earlier one matches:
 
 1. Exact-type sparse matches (`SparseMatrixCSC{Float64,Int}`, `{ComplexF64,Int}`,
    `{Bool,Int}`) — before the generic `T <: AbstractSparseMatrix` fallback.
-2. `T <: Array` block — catches `Vector{String}` (→ `StringVectorMarshaler`) before
-   the struct-vector branch; `ET`, `ND` pulled from type params inside the block.
+2. `T <: Array` block — in order within the block:
+   - Bool/Complex/DenseNumeric element types
+   - `ET === String && ND == 1` → `StringVectorMarshaler`
+   - `ET === Char && ND == 2` → `CharMatrixMarshaler`
+   - `ND == 1 && _is_user_struct(ET)` → `StructVectorMarshaler{ET}`
+   - `ND == 2 && _is_user_struct(ET)` → `StructMatrixMarshaler{ET}`
 3. `T <: Tuple` — comes **after** the Array block and **before** `_is_user_struct`.
    Critical: `isstructtype(Tuple{...})` returns `true`, so if the user-struct branch
    ran first it would swallow all Tuple types.
-4. `_is_user_struct(T)` — plain `struct` and `NamedTuple`.
+4. `_is_user_struct(T)` — plain `struct` and `NamedTuple` (→ `StructMarshaler{T}`).
 
 ### `_render_type` dispatch order (`src/codegen.jl`)
 
 Same ordering constraint: the `T <: Tuple` branch must appear **before** the
 `isstructtype(T)` / user-struct branch, for the same reason.
+
+### Static dispatch in `@generated` bodies (`src/marshaling.jl`)
+
+All `@generated` marshalers (`StructMarshaler`, `StructVectorMarshaler`,
+`StructMatrixMarshaler`, `CellArrayMarshaler`) resolve field marshalers at
+**code-generation time**, not at runtime. The pattern:
+
+```julia
+# Code-gen phase (before `return`):
+let m = marshaler_for(fieldtype(T, k)), MT = typeof(m)
+    :(load($MT(), mx_get_field(pa, Csize_t(i - 1), $(string(fieldname(T, k))))))
+end
+```
+
+`marshaler_for` is called once during `@generated` body evaluation; `typeof(m)`
+is interpolated as a literal concrete type into the generated AST. The emitted code
+has no runtime `marshaler_for` calls — every `load`/`store!` resolves to a
+concrete monomorphic method. **Do not revert to emitting `marshaler_for($(FT))`
+as a runtime call** — that returns `Any`-typed and breaks type stability.
 
 ### `CellArrayMarshaler{T}` (`src/marshaling.jl`)
 
@@ -132,24 +157,27 @@ unsupported as a cell element) surfaces only when the `@generated` body runs.
 
 ### libmx stub (`test/matlab/libmx_stub/libmx_stub.c`)
 
-~400-line C file. Key struct:
+~430-line C file. Key struct:
 
 ```c
-typedef struct _mx {
-    int classid, is_complex, is_sparse, is_cell;
+typedef struct _mx_stub {
+    int classid, is_complex, is_sparse;
     size_t m, n, ndim, nelems; size_t *dims;
-    void *pr, *pi;
+    void *pr, *pi;                        /* pr = char data (uint16_t) for MX_CHAR_CLASS */
     size_t nzmax, *ir, *jc;
-    int nfields; char **fieldnames; struct _mx **fields; /* nfields × nelems */
-    struct _mx **cells;
+    int nfields; char **fieldnames;
+    struct _mx_stub **fields;             /* [nfields × nelems] column-major */
+    struct _mx_stub **cells;
 } mx_stub_t;
 ```
 
 All function names are bare (no `_730` suffix) because on Linux `@mxccall730`
-expands to bare names. `mxDestroyArray` recurses into struct fields and cell
-children. `mxDuplicateArray` performs a deep copy. `mexErrMsgIdAndTxt` calls
-`abort()` — marshaler errors surface as Julia exceptions in unit tests, so this
-path is never reached.
+expands to bare names. `element_size(MX_CHAR_CLASS)` returns 2 (uint16_t per
+element). `mxCreateCharArray(ndim, dims)` allocates `pr` as `uint16_t[nelems]`;
+`mxGetChars(pa)` returns `uint16_t *pr`. `mxDestroyArray` recurses into struct
+fields and cell children. `mxDuplicateArray` performs a deep copy.
+`mexErrMsgIdAndTxt` calls `abort()` — marshaler errors surface as Julia exceptions
+in unit tests, so this path is never reached.
 
 ## TypeContracts dependency
 

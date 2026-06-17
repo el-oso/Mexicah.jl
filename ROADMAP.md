@@ -93,22 +93,13 @@ latent defects, the rest are features and polish.
   — comment `@JuliaRegistrator register` on a commit in this repo, or use the web UI.
   The PR will auto-merge after the 3-day new-package cooloff.
 
-## 3. Testing & tooling
-
-- **MATLAB-free load/store unit harness.** Implemented in v0.21.0 as
-  `test/matlab/libmx_stub/libmx_stub.c` — a C shared library (~400 lines, ~45
-  functions) built in CI before the Julia test step on Linux. Preloading with
-  `RTLD_GLOBAL` satisfies all `ccall(:mxFoo, …)` calls made by the marshalers,
-  enabling full round-trip unit tests without MATLAB. macOS/Windows use real MATLAB
-  via `MATLAB.yml`.
-
-## 4. Cleanup & polish
+## 3. Cleanup & polish
 
 - Add `docs/src/assets/logo.png` + `favicon.ico` (the Vitepress build warns they
   are missing). **In progress** — a designer is producing the assets; drop them in
   and DocumenterVitepress picks them up automatically.
 
-## 5. GPU follow-ons (deferred — needs a CUDA + MATLAB host)
+## 4. GPU follow-ons (deferred — needs a CUDA + MATLAB host)
 
 Scheduled last: unlike everything above, this work cannot be developed or
 validated on the current machine or on hosted CI. It needs a single host with
@@ -125,3 +116,27 @@ available.
 - **2-D `Matrix` kernels** (currently 1-D `Vector{Float64}`, `@index(Global)`).
 - Infrastructure: self-hosted GPU CI (hosted runners have no NVIDIA GPU);
   AMDGPU/Metal/oneAPI are blocked upstream by missing runtime kernel loaders.
+
+---
+
+## Notes for future sessions
+
+- **Test count:** 81 tests, 253 assertions (v0.22.0). Baseline for regression checks.
+- **libmx stub** (`test/matlab/libmx_stub/libmx_stub.c`, ~430 lines) must be rebuilt
+  locally before running tests without MATLAB:
+  `cc -O2 -shared -fPIC -o test/matlab/libmx_stub/libmx_stub.so test/matlab/libmx_stub/libmx_stub.c`
+- **General registry registration**: all AutoMerge criteria met. Trigger with
+  `@JuliaRegistrator register` comment on any commit in the GitHub repo.
+- **`@mxccall730` rule**: any MATLAB C API function whose parameters include
+  `mwSize`/`mwIndex` (dimensions, element counts, sparse indices) must use
+  `@mxccall730` on Windows — bare names resolve to the obsolete 32-bit API.
+  Functions that are pure type/metadata queries use `@mxccall`.
+- **`marshaler_for` dispatch order** (invariant — do not reorder):
+  exact sparse → `T <: Array` block (Vector/Matrix{String}, Matrix{Char},
+  Vector{S}/Matrix{S} struct) → `T <: Tuple` → `_is_user_struct`.
+  Tuples must come before `_is_user_struct` because `isstructtype(Tuple{…})` is `true`.
+- **Static dispatch in `@generated` bodies**: call `marshaler_for(fieldtype(T,k))`
+  in the *code-generation phase* (before `return`), interpolate `typeof(m)` into the
+  generated AST — never emit `marshaler_for($(SomeType))` as a runtime call.
+- **TypeContracts 0.13**: no `__init__` or `_reinit_registry!` needed. `@contract`
+  emits method definitions that survive precompile cache loading.
