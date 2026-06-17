@@ -1,5 +1,10 @@
 # Mexicah.jl
 
+[![CI](https://github.com/el-oso/Mexicah.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/el-oso/Mexicah.jl/actions/workflows/CI.yml)
+[![MATLAB](https://github.com/el-oso/Mexicah.jl/actions/workflows/MATLAB.yml/badge.svg)](https://github.com/el-oso/Mexicah.jl/actions/workflows/MATLAB.yml)
+[![Docs](https://github.com/el-oso/Mexicah.jl/actions/workflows/Documentation.yml/badge.svg)](https://el-oso.github.io/Mexicah.jl/dev/)
+[![Julia 1.12](https://img.shields.io/badge/Julia-1.12-9558B2?logo=julia)](https://julialang.org)
+
 > **Mexicah** — *Matrix-Laboratory EXecutable Interop: Compiled, AOT, Host-free.*
 >
 > *Pronounced meh-SHEE-kah, after the Mexica of central Mexico.*
@@ -45,6 +50,16 @@ run('mex/mexicah_setup.m')
 add_doubles(3, 4)              % → 7
 scale_rows([1 2; 3 4], 10)     % → [10 20; 30 40]
 ```
+
+## Requirements (build machine only)
+
+| Tool | Linux / macOS | Windows |
+|---|---|---|
+| Julia 1.12+ | `juliaup add 1.12` | same |
+| `juliac` | `julia -e 'using Pkg; Pkg.Apps.add("JuliaC")'` | same |
+| C compiler | `cc` / `gcc` / `clang` (auto-detected) | `gcc` (MinGW/MSYS2) or `clang` (LLVM) |
+
+End users need only MATLAB — no Julia, no compiler.
 
 ## Highlights
 

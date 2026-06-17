@@ -59,14 +59,44 @@ juliac --version
 
 ## 3. Make sure a C compiler is present
 
-Mexicah ships a tiny C loader alongside your MEX, so it needs a C compiler at
-build time (you almost certainly already have one):
+Mexicah compiles a tiny C gateway loader alongside your MEX. It auto-detects
+whichever of these is on your `PATH`:
+
+| Platform | Probe order | Notes |
+|---|---|---|
+| **Linux / macOS** | `cc` → `gcc` → `clang` | `cc` is almost always present |
+| **Windows** | `gcc` → `clang` → `cc` | install one of the options below |
+
+**Linux / macOS** — you almost certainly already have one:
 
 ```bash
-cc --version        # or: gcc --version
+cc --version        # or: gcc --version / clang --version
 ```
 
 On Ubuntu/Debian, if it's missing: `sudo apt-get install build-essential`.
+
+**Windows** — install either option:
+
+- **MinGW-w64 / MSYS2** (provides `gcc`):
+  ```powershell
+  winget install MSYS2.MSYS2
+  # then from the MSYS2 shell:
+  pacman -S mingw-w64-ucrt-x86_64-gcc
+  ```
+  Add `C:\msys64\ucrt64\bin` to your `PATH`.
+
+- **LLVM/Clang** (provides `clang`):
+  ```powershell
+  winget install LLVM.LLVM
+  ```
+  The installer offers to add LLVM to `PATH`; accept it.
+
+Verify whichever you chose:
+
+```powershell
+gcc --version   # MinGW path
+clang --version # LLVM path
+```
 
 ## 4. Install Mexicah.jl
 

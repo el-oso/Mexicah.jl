@@ -71,3 +71,38 @@ end
     @test info.argtypes == Type[Float64]
     @test info.rettypes == Type[Float64]
 end
+
+@testitem "_gateway_c_source contains platform-appropriate symbols" begin
+    using Mexicah, Test
+
+    src = Mexicah._gateway_c_source("add_impl.so", "mexFunction")
+
+    # Platform-independent: entry point is always exported
+    @test occursin("mexFunction", src)
+    @test occursin("add_impl.so", src)
+
+    # Both branches are always present (compile-time #ifdef); check structural content.
+    @test occursin("LoadLibraryA", src)
+    @test occursin("GetProcAddress", src)
+    @test occursin("__declspec(dllexport)", src)
+    @test occursin("dlopen", src)
+    @test occursin("dlsym", src)
+end
+
+@testitem "_build_mex_gateway compiles a valid shared library" begin
+    using Mexicah, Test
+
+    dir = mktempdir()
+    ext = Mexicah.mex_ext()
+    out_mex = joinpath(dir, "testgw.$ext")
+
+    # Compile the thin C gateway; skip if no C compiler is available.
+    cc = something(Sys.which("cc"), Sys.which("gcc"), Sys.which("clang"), nothing)
+    if cc === nothing
+        @warn "_build_mex_gateway test skipped: no C compiler found"
+    else
+        Mexicah._build_mex_gateway(dir, out_mex, "testgw_impl.$(Mexicah._impl_ext())", "mexFunction")
+        @test isfile(out_mex)
+        @test filesize(out_mex) > 0
+    end
+end
