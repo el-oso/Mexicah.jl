@@ -1,6 +1,7 @@
 module Mexicah
 
 using SparseArrays: SparseMatrixCSC, nnz
+using TypeContracts: explain_trim_failure, TrimFailure
 
 include("types.jl")
 include("api.jl")

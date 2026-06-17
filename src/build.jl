@@ -36,6 +36,7 @@ function build_mex(
         bundle::Bool = true,
         juliac_bin::String = "juliac",
         project::String = _active_project_dir(),
+        verbose::Bool = false,
     )::String
     func_name = name === nothing ? nameof(f) : name
     func_module = parentmodule(f)
@@ -55,6 +56,7 @@ function build_mex(
     return _compile_generated_source(
         src, func_name, output;
         trim = trim, bundle = bundle, juliac_bin = juliac_bin, project = project,
+        verbose = verbose,
     )
 end
 
@@ -87,6 +89,7 @@ function _run_juliac(
         bundle::Bool = true,
         juliac_bin::String = "juliac",
         project::String = pkgdir(@__MODULE__),
+        verbose::Bool = false,
     )::String
     mkpath(output)
     generated_jl = joinpath(output, "$(lib_base)_mexgen.jl")
@@ -106,10 +109,22 @@ function _run_juliac(
     end
     push!(args, generated_jl)
 
-    @info "Mexicah: compiling $(lib_base) with juliac…"
-    # On Windows the juliac launcher is a .cmd/.bat, which CreateProcess can't run
-    # by name — route through `cmd /c` so PATHEXT resolution finds it.
-    run(Sys.iswindows() ? Cmd(vcat(["cmd", "/c"], args)) : Cmd(args))
+    verbose && @info "Mexicah: compiling $(lib_base) with juliac…"
+    # Capture juliac output so --trim=safe failures can be translated into
+    # readable, source-mapped diagnostics (TypeContracts.TrimDiagnostics).
+    # On Windows route through `cmd /c` so PATHEXT resolves the .cmd launcher.
+    base_cmd = Sys.iswindows() ? Cmd(vcat(["cmd", "/c"], args)) : Cmd(args)
+    logf = tempname()
+    proc = open(logf, "w") do io
+        run(pipeline(ignorestatus(base_cmd); stdout=io, stderr=io))
+    end
+    captured = isfile(logf) ? read(logf, String) : ""
+    rm(logf; force=true)
+    if !success(proc)
+        verbose && print(stderr, captured)
+        throw(explain_trim_failure(captured; entry_path=abspath(generated_jl)))
+    end
+    verbose && print(captured)
 
     # With `--bundle`, juliac (≥0.3) nests the output library next to the bundled
     # libjulia: under `<output>/lib/` on Unix, `<output>/bin/` on Windows. Without
@@ -141,10 +156,12 @@ function _compile_generated_source(
         bundle::Bool = true,
         juliac_bin::String = "juliac",
         project::String = pkgdir(@__MODULE__),
+        verbose::Bool = false,
     )::String
     produced_lib = _run_juliac(
         src, string(func_name), output;
         trim = trim, bundle = bundle, juliac_bin = juliac_bin, project = project,
+        verbose = verbose,
     )
     out_mex = joinpath(output, "$(func_name).$(mex_ext())")
     impl_name = "$(func_name)_impl.$(_impl_ext())"
@@ -177,6 +194,7 @@ function build_shared_mex(
         trim::Bool = true,
         juliac_bin::String = "juliac",
         project::String = _active_project_dir(),
+        verbose::Bool = false,
     )::String
     entries = Tuple{Module, Symbol, Vector{Type}, Vector{Type}}[]
     for (f, intypes, outtypes) in funcs
@@ -189,6 +207,7 @@ function build_shared_mex(
     produced_lib = _run_juliac(
         src, string(name), output;
         trim = trim, bundle = true, juliac_bin = juliac_bin, project = project,
+        verbose = verbose,
     )
     impl_name = "$(name)_impl.$(_impl_ext())"
     impl_path = joinpath(output, impl_name)
