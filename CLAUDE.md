@@ -153,4 +153,5 @@ path is never reached.
 
 ## TypeContracts dependency
 
-Developed locally at `/home/el_oso/Documents/claude/TypeContracts`, added as a path source in `Project.toml` and `test/Project.toml`.
+Registered in the Julia General registry as `TypeContracts 0.13`. Both `Project.toml`
+and `test/Project.toml` resolve it from General — no `[sources]` entries needed.

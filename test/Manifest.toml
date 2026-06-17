@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "111bdbf62532dc71163b622045c700c02eecb0a6"
+project_hash = "56d0df29957200f4b439bc5291888126521f69e9"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -205,9 +205,7 @@ version = "1.103.6"
 
 [[deps.TypeContracts]]
 deps = ["InteractiveUtils"]
-git-tree-sha1 = "e993308bac9d008b6c9a04ed47ff486b40b2dfa4"
-repo-rev = "master"
-repo-url = "https://github.com/el-oso/TypeContracts.jl"
+git-tree-sha1 = "58f93c700087d3a21bb6228cf2397ca0ab1cb70b"
 uuid = "c7a3f1e2-84b5-4d69-9e0a-1f2b3c4d5e6f"
 version = "0.13.0"
 

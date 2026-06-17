@@ -68,21 +68,16 @@ latent defects, the rest are features and polish.
 
 ## 2. Distribution
 
-- **Register in the General registry.** All AutoMerge criteria are met except one
-  hard blocker: General forbids packages that depend on unregistered packages.
-  `TypeContracts` registration was **requested 2026-06-16** and is in the mandatory
-  3-day new-package cooloff (clears ~**2026-06-19**). Once it merges:
+- **Register in the General registry.** All AutoMerge criteria are now met:
+  - `TypeContracts 0.13` merged into General (2026-06-17).
+  - `[sources]` blocks removed from `Project.toml` and `test/Project.toml`; both
+    Manifests resolve `TypeContracts` from General (git-tree-sha1 `58f93c70`).
+  - MIT license, upper-bounded `[compat]` for all deps, tests + CI, Documenter,
+    TagBot, CompatHelper, and LLM disclosure in README are all in place.
 
-  1. Remove the `[sources]` block from `Project.toml` and `test/Project.toml`.
-  2. Run `julia --project=. -e 'using Pkg; Pkg.update()'` and
-     `julia --project=test -e 'using Pkg; Pkg.update()'` to resolve manifests.
-  3. Commit and push.
-  4. Trigger [Registrator](https://github.com/JuliaRegistries/Registrator.jl)
-     (comment `@JuliaRegistrator register` on a commit in this repo, or use the
-     web UI). The PR will auto-merge after the 3-day new-package cooloff.
-
-  Everything else is already in place: MIT license, upper-bounded `[compat]` for all
-  deps, tests + CI, Documenter, TagBot, CompatHelper, and LLM disclosure in README.
+  **Next step:** Trigger [Registrator](https://github.com/JuliaRegistries/Registrator.jl)
+  — comment `@JuliaRegistrator register` on a commit in this repo, or use the web UI.
+  The PR will auto-merge after the 3-day new-package cooloff.
 
 ## 3. Testing & tooling
 
