@@ -827,6 +827,41 @@ end
 
 mx_class_id(::StringVectorMarshaler)::Cint = mxCELL_CLASS
 
+# ── Matrix{String} ↔ MATLAB string array ──────────────────────────────────────
+# MATLAB's modern `string` array (R2016b+) is opaque in the legacy C Matrix API
+# (no mxSTRING_CLASS, no create/get). We bridge through a cell of char using
+# MATLAB's own string()/cellstr() builtins via mexCallMATLAB. Asymmetric like
+# StringMarshaler: load is normal; output goes through the store_result override
+# below (Mexicah cannot allocate an empty string array for the create+store! flow).
+#
+# Mapping (Option B): Matrix{String} → string array; Vector{String} stays cell of
+# char. MATLAB string arrays are always ≥2-D (a "1-D" one is 1×N), so a 1×N string
+# array round-trips as a 1×N Matrix{String}. If the Vector-vs-Matrix split becomes
+# an ergonomic problem, switch to a dedicated wrapper type (Option A) — the
+# mexCallMATLAB bridge below is reused as-is, only the dispatch type changes.
+
+struct StringArrayMarshaler end
+
+function load(::StringArrayMarshaler, pa::MxArray)::Matrix{String}
+    cell = mex_call_matlab_1("cellstr", pa)   # string array → M×N cell of char
+    m = Int(mx_get_m(cell))
+    n = Int(mx_get_n(cell))
+    out = Matrix{String}(undef, m, n)
+    @inbounds for idx in 1:(m * n)
+        out[idx] = mx_get_string(mx_get_cell(cell, Csize_t(idx - 1)))
+    end
+    return out
+end
+
+# No-op: real output is the store_result(::Matrix{String}) override below.
+store!(::StringArrayMarshaler, pa::MxArray, v::Any)::Cvoid = nothing
+
+# Placeholder (unused — output goes through store_result); satisfies the contract.
+create(::StringArrayMarshaler, ::Tuple)::MxArray = mx_create_cell_matrix(Csize_t(0), Csize_t(0))
+
+# String arrays are opaque (no dedicated class id); the marshaler bridges via cells.
+mx_class_id(::StringArrayMarshaler)::Cint = mxCELL_CLASS
+
 # ── Dispatch: pick a marshaler for a Julia type ───────────────────────────────
 
 function marshaler_for(@nospecialize(T::Type))
@@ -862,6 +897,7 @@ function marshaler_for(@nospecialize(T::Type))
             return DenseArrayMarshaler{ET, ND}()
         end
         ET === String && ND == 1 && return StringVectorMarshaler()
+        ET === String && ND == 2 && return StringArrayMarshaler()
         ET === Char && ND == 2 && return CharMatrixMarshaler()
         _is_user_struct(ET) && return StructArrayMarshaler{ET, ND}()
     end
@@ -877,7 +913,7 @@ function marshaler_for(@nospecialize(T::Type))
             "complex arrays Array{ComplexF64,N}, flat struct/NamedTuple, " *
             "Array{<struct>,N} of any rank (→ N-D struct array), " *
             "Tuple{...} (→ cell array), Vector{String} (→ cell of char), " *
-            "Matrix{Char} (→ M×N char array), and String.",
+            "Matrix{String} (→ string array), Matrix{Char} (→ M×N char array), and String.",
     )
 end
 
@@ -911,5 +947,19 @@ end
 
 function store_result(plhs::Ptr{MxArray}, k::Int, v::String)
     unsafe_store!(plhs, mx_create_string(v), k)
+    return
+end
+
+# Matrix{String} → MATLAB string array. Concrete Matrix{String} so this is strictly
+# more specific than the generic store_result and does NOT capture Vector{String}
+# (which stays the cell-of-char path). Build an M×N cell of char, then let MATLAB's
+# string() builtin convert it to a string array (shape preserved).
+function store_result(plhs::Ptr{MxArray}, k::Int, v::Matrix{String})
+    m, n = size(v)
+    cell = mx_create_cell_matrix(Csize_t(m), Csize_t(n))
+    @inbounds for idx in 1:(m * n)
+        mx_set_cell!(cell, Csize_t(idx - 1), mx_create_string(v[idx]))
+    end
+    unsafe_store!(plhs, mex_call_matlab_1("string", cell), k)
     return
 end

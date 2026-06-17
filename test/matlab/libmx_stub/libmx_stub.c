@@ -37,6 +37,9 @@
 #define MX_UINT32_CLASS    13
 #define MX_INT64_CLASS     14
 #define MX_UINT64_CLASS    15
+/* Private marker for MATLAB's opaque `string` array (no real mxClassID exists).
+ * The stub fakes string<->cellstr conversion in mexCallMATLAB over this class. */
+#define MX_STRING_CLASS    19
 
 /* ── Complexity flags ────────────────────────────────────────────────────── */
 #define MX_REAL    0
@@ -263,6 +266,8 @@ uint16_t *mxGetChars(mxArray pa) {
     return (uint16_t *)pa->pr;
 }
 
+/* Char data is stored as uint16_t (mxChar), consistent with element_size and
+ * mxCreateCharArray/mxGetChars — so deep_copy (uses element_size) is byte-correct. */
 mxArray mxCreateString(const char *str) {
     size_t len = str ? strlen(str) : 0;
     mx_stub_t *p = alloc_stub();
@@ -273,9 +278,9 @@ mxArray mxCreateString(const char *str) {
     p->dims    = (size_t *)malloc(2 * sizeof(size_t));
     p->dims[0] = 1; p->dims[1] = len;
     p->nelems  = len;
-    p->pr      = malloc(len + 1);
-    if (str) memcpy(p->pr, str, len + 1);
-    else ((char *)p->pr)[0] = '\0';
+    p->pr      = calloc(len ? len : 1, sizeof(uint16_t));
+    uint16_t *d = (uint16_t *)p->pr;
+    for (size_t i = 0; i < len; i++) d[i] = (uint16_t)(unsigned char)str[i];
     return p;
 }
 
@@ -426,7 +431,8 @@ int mxGetString(const mxArray pa, char *buf, size_t buflen) {
     if (!pa || !buf || buflen == 0) return 1;
     size_t len = pa->nelems;
     if (len >= buflen) len = buflen - 1;
-    if (pa->pr) memcpy(buf, pa->pr, len);
+    const uint16_t *s = (const uint16_t *)pa->pr;  /* mxChar (uint16) → narrow to char */
+    for (size_t i = 0; i < len; i++) buf[i] = s ? (char)s[i] : '\0';
     buf[len] = '\0';
     return 0;
 }
@@ -481,6 +487,34 @@ void mxSetCell(mxArray pa, size_t index, mxArray value) {
     if (!pa->cells || index >= pa->nelems) return;
     mxDestroyArray(pa->cells[index]);
     pa->cells[index] = value;
+}
+
+/* ── MEX callback (only the string<->cellstr bridge Mexicah uses) ─────────── */
+
+/* Fakes MATLAB's string()/cellstr() converters so the StringArrayMarshaler round
+ * trip runs without real MATLAB. A `string` array is modeled as MX_STRING_CLASS
+ * wrapping the same `cells` (char arrays) as a cell-of-char; both directions copy
+ * shape and deep-copy the elements (source is not mutated). Any other function
+ * name returns nonzero (mimicking a MATLAB error). */
+int mexCallMATLAB(int nlhs, mxArray plhs[], int nrhs, mxArray prhs[], const char *fn) {
+    if (nlhs < 1 || nrhs < 1 || !prhs[0] || !fn) return 1;
+    int to_string = strcmp(fn, "string") == 0;
+    int to_cell   = strcmp(fn, "cellstr") == 0;
+    if (!to_string && !to_cell) return 1;
+    mx_stub_t *src = prhs[0];
+    mx_stub_t *p = alloc_stub();
+    p->classid = to_string ? MX_STRING_CLASS : MX_CELL_CLASS;
+    p->m       = src->m;
+    p->n       = src->n;
+    p->ndim    = src->ndim ? src->ndim : 2;
+    p->dims    = (size_t *)malloc(p->ndim * sizeof(size_t));
+    if (src->dims) memcpy(p->dims, src->dims, src->ndim * sizeof(size_t));
+    p->nelems  = src->nelems;
+    p->cells   = (mx_stub_t **)calloc(p->nelems ? p->nelems : 1, sizeof(mx_stub_t *));
+    for (size_t i = 0; i < p->nelems; i++)
+        p->cells[i] = (src->cells && src->cells[i]) ? deep_copy(src->cells[i]) : NULL;
+    plhs[0] = p;
+    return 0;
 }
 
 /* ── MEX error (abort in the stub — not reached in unit tests) ───────────── */

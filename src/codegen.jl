@@ -173,6 +173,7 @@ function _render_type(T::Type)::String
     T === SparseMatrixCSC{ComplexF64, Int} && return "Mexicah.SparseMatrixCSC{ComplexF64,Int}"
     T === SparseMatrixCSC{Bool, Int} && return "Mexicah.SparseMatrixCSC{Bool,Int}"
     T === String && return "String"
+    T === Matrix{String} && return "Matrix{String}"
     T === Matrix{Char} && return "Matrix{Char}"
     if T <: Array
         return "Array{$(_render_type(eltype(T))), $(ndims(T))}"

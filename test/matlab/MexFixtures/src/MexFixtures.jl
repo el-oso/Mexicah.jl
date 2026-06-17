@@ -131,6 +131,12 @@ function strs_upper(v::Vector{String})::Vector{String}
     return map(uppercase, v)
 end
 
+# Matrix{String} ↔ MATLAB string array (StringArrayMarshaler; via mexCallMATLAB
+# string()/cellstr()). Exercises the real string() / cellstr() builtins in CI.
+function str_arr_upper(m::Matrix{String})::Matrix{String}
+    return map(uppercase, m)
+end
+
 # (function, input types, output types), in build order. The first entry bundles
 # the Julia runtime; the rest reuse it (see build_fixtures.jl).
 const FIXTURES = [
@@ -156,6 +162,7 @@ const FIXTURES = [
     (logical_sparse_identity, Type[SparseMatrixCSC{Bool, Int}], Type[SparseMatrixCSC{Bool, Int}]),
     (tuple_passthrough, Type[Float64, Int64], Type[Tuple{Float64, Int64}]),
     (strs_upper, Type[Vector{String}], Type[Vector{String}]),
+    (str_arr_upper, Type[Matrix{String}], Type[Matrix{String}]),
 ]
 
 end # module MexFixtures

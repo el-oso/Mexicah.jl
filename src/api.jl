@@ -283,6 +283,28 @@ function mx_get_chars(pa::MxArray)::Ptr{UInt16}
     return @mxccall ccall(:mxGetChars, Ptr{UInt16}, (MxArray,), pa)
 end
 
+# ── MEX callback into MATLAB ──────────────────────────────────────────────────
+# mexCallMATLAB invokes a MATLAB builtin from inside the MEX call. Used to bridge
+# the opaque `string` array type (no C Matrix API) via MATLAB's own string/cellstr
+# converters. 1-in/1-out is all we need; single-element Ref{MxArray} buffers stand
+# in for the mxArray *plhs[] / *prhs[] arrays (ccall converts Ref → Ptr and roots it).
+function mex_call_matlab_1(fn::String, arg::MxArray)::MxArray
+    out = Ref{MxArray}(C_NULL)
+    inp = Ref{MxArray}(arg)
+    rc = @mexccall ccall(
+        :mexCallMATLAB,
+        Cint,
+        (Cint, Ptr{MxArray}, Cint, Ptr{MxArray}, Cstring),
+        Cint(1),
+        out,
+        Cint(1),
+        inp,
+        fn,
+    )
+    rc != 0 && error("Mexicah: mexCallMATLAB(\"$fn\") failed")
+    return out[]
+end
+
 # ── MEX error / output ────────────────────────────────────────────────────────
 
 mex_errorf(id::AbstractString, msg::AbstractString)::Cvoid =

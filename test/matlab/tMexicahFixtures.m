@@ -139,5 +139,10 @@ classdef tMexicahFixtures < matlab.unittest.TestCase
             r = strs_upper({'hello', 'world'});
             verifyEqual(tc, r, {'HELLO', 'WORLD'});
         end
+
+        function tStrArrUpper(tc)           % Matrix{String} → MATLAB string array
+            r = str_arr_upper(["a" "bb"; "ccc" "d"]);
+            verifyEqual(tc, r, ["A" "BB"; "CCC" "D"]);
+        end
     end
 end

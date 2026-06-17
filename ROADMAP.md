@@ -5,11 +5,11 @@ feasibility notes, and a code audit (2026-06-16). Ordered by priority within eac
 section; **Section 1 (correctness/robustness) should come first** — those are
 latent defects, the rest are features and polish.
 
-## Status (v0.23.0)
+## Status (v0.24.0)
 
 - End-to-end MATLAB CI is green and blocking on Linux, Windows, and macOS:
   19 asserted fixtures in one session + sparse (including complex and logical), per OS.
-- Full Julia test suite green (82 tests, 257 assertions); docs build clean.
+- Full Julia test suite green (83 tests, 261 assertions); docs build clean.
 - `:matlab`-tagged marshaler round-trips now run in regular CI (without MATLAB) via
   the `libmx_stub.so` preloaded on Linux runners.
 - Marshaler coverage: real-numeric scalars (`Float64/Float32`, `Int8/16/32/64`,
@@ -17,10 +17,28 @@ latent defects, the rest are features and polish.
   type and rank, logical `Array{Bool,N}`, `SparseMatrixCSC{Float64,Int}`,
   `SparseMatrixCSC{ComplexF64,Int}`, `SparseMatrixCSC{Bool,Int}`,
   complex `Array{ComplexF64,N}` **and `Array{ComplexF32,N}`**, flat
-  `struct`/`NamedTuple` (in & out), **`Array{<struct>,N}` ↔ N-D struct array of
-  any rank** (Vector → N×1, Matrix → M×N, 3-D+ → N-D), `Tuple{A,B,…}` ↔ 1×N cell
-  array, `Vector{String}` ↔ N×1 cell of char, `Matrix{Char}` ↔ M×N char array,
-  `String`, `UInt64` handles, and multiple outputs.
+  `struct`/`NamedTuple` (in & out), `Array{<struct>,N}` ↔ N-D struct array of
+  any rank (Vector → N×1, Matrix → M×N, 3-D+ → N-D), `Tuple{A,B,…}` ↔ 1×N cell
+  array, `Vector{String}` ↔ N×1 cell of char, **`Matrix{String}` ↔ MATLAB string
+  array**, `Matrix{Char}` ↔ M×N char array, `String`, `UInt64` handles, and
+  multiple outputs. **All §1 marshaler coverage is now complete.**
+
+## Recently completed (v0.24.0)
+
+- **§1 coverage (final item):** `Matrix{String}` ↔ MATLAB `string` array
+  (`StringArrayMarshaler`). The `string` type is opaque in the legacy C Matrix API
+  (no `mxSTRING_CLASS`), so the marshaler bridges through a cell-of-char using
+  MATLAB's own `string()` / `cellstr()` builtins via a new `mexCallMATLAB` wrapper
+  (`mex_call_matlab_1`, libmx). Output uses a `store_result(::Matrix{String})`
+  override (Mexicah can't allocate an empty string array). **Mapping choice
+  (Option B):** `Matrix{String}` → string array; `Vector{String}` stays cell-of-char.
+  If the Vector-vs-Matrix split becomes an ergonomic problem, switch to a dedicated
+  wrapper type (Option A) — the `mexCallMATLAB` bridge is reused as-is, only the
+  dispatch type changes. Tested via a stub `mexCallMATLAB` emulation + a real-MATLAB
+  `str_arr_upper` fixture.
+- **stub fidelity:** unified char storage to `uint16_t` (mxChar) across
+  `mxCreateString`/`mxCreateCharArray`/`mxGetString`/`mxGetChars`, so `deep_copy`
+  (used by the new `mexCallMATLAB`) is byte-correct for char arrays.
 
 ## Recently completed (v0.23.0)
 
@@ -84,10 +102,10 @@ latent defects, the rest are features and polish.
 
 ## 1. Marshaler coverage
 
-### Later
-
-- **MATLAB `string` arrays** (R2016b+ `string` type, `mxSTRING_CLASS`) — distinct
-  from char arrays; requires a different C API and a new stub classid. Deferred.
+**Complete.** All planned Julia ↔ MATLAB type mappings are implemented and tested
+(see Status above). No open items. Possible future niceties if a need arises:
+N-D `string` arrays beyond 2-D, or switching the `string`-array mapping from
+`Matrix{String}` (Option B) to a dedicated wrapper type (Option A).
 
 ## 2. Distribution
 
@@ -130,7 +148,7 @@ available.
 
 ## Notes for future sessions
 
-- **Test count:** 82 tests, 257 assertions (v0.23.0). Baseline for regression checks.
+- **Test count:** 83 tests, 261 assertions (v0.24.0). Baseline for regression checks.
 - **libmx stub** (`test/matlab/libmx_stub/libmx_stub.c`, ~430 lines) must be rebuilt
   locally before running tests without MATLAB:
   `cc -O2 -shared -fPIC -o test/matlab/libmx_stub/libmx_stub.so test/matlab/libmx_stub/libmx_stub.c`
@@ -141,10 +159,10 @@ available.
   `@mxccall730` on Windows — bare names resolve to the obsolete 32-bit API.
   Functions that are pure type/metadata queries use `@mxccall`.
 - **`marshaler_for` dispatch order** (invariant — do not reorder):
-  exact sparse → `T <: Array` block (String vector, Matrix{Char},
-  `Array{S,N}` struct via `StructArrayMarshaler{ET,ND}`) → `T <: Tuple` →
-  `_is_user_struct`. Tuples must come before `_is_user_struct` because
-  `isstructtype(Tuple{…})` is `true`.
+  exact sparse → `T <: Array` block (String vector → cell, `Matrix{String}` →
+  string array, `Matrix{Char}`, `Array{S,N}` struct via `StructArrayMarshaler{ET,ND}`)
+  → `T <: Tuple` → `_is_user_struct`. Tuples must come before `_is_user_struct`
+  because `isstructtype(Tuple{…})` is `true`.
 - **Static dispatch in `@generated` bodies**: call `marshaler_for(fieldtype(T,k))`
   in the *code-generation phase* (before `return`), interpolate `typeof(m)` into the
   generated AST — never emit `marshaler_for($(SomeType))` as a runtime call.

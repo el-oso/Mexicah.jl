@@ -94,6 +94,9 @@ end
     @test Mexicah.mx_class_id(Mexicah.CellArrayMarshaler{Tuple{Float64, Int64}}()) ==
         Mexicah.mxCELL_CLASS
     @test Mexicah.mx_class_id(Mexicah.StringVectorMarshaler()) == Mexicah.mxCELL_CLASS
+    # Matrix{String} → MATLAB string array (distinct from Vector{String} → cell)
+    @test Mexicah.marshaler_for(Matrix{String}) isa Mexicah.StringArrayMarshaler
+    @test Mexicah.mx_class_id(Mexicah.StringArrayMarshaler()) isa Cint
 end
 
 @testitem "marshaler_for: structs and NamedTuples" begin
@@ -234,4 +237,18 @@ end
     @test size(got) == (2, 2, 2)
     @test all(got[idx] == src[idx] for idx in eachindex(src))
     Mexicah.mx_destroy_array(pa)
+end
+
+@testitem "StringArrayMarshaler (Matrix{String}) round-trip" tags = [:matlab] begin
+    using Mexicah, Test
+    src = ["a" "bb"; "ccc" "d"]   # 2×2 Matrix{String}
+    # Output goes through the store_result(::Matrix{String}) override (string array
+    # built via mexCallMATLAB("string")); load reads it back via "cellstr".
+    slot = Ref{Mexicah.MxArray}(C_NULL)
+    GC.@preserve slot begin
+        Mexicah.store_result(Base.unsafe_convert(Ptr{Mexicah.MxArray}, slot), 1, src)
+        got = Mexicah.load(Mexicah.StringArrayMarshaler(), slot[])
+        @test size(got) == (2, 2)
+        @test got == src
+    end
 end

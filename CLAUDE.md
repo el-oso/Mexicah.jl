@@ -106,7 +106,8 @@ Order matters — later branches are not reached if an earlier one matches:
    `{Bool,Int}`) — before the generic `T <: AbstractSparseMatrix` fallback.
 2. `T <: Array` block — in order within the block:
    - Bool/Complex/DenseNumeric element types
-   - `ET === String && ND == 1` → `StringVectorMarshaler`
+   - `ET === String && ND == 1` → `StringVectorMarshaler` (cell of char)
+   - `ET === String && ND == 2` → `StringArrayMarshaler` (MATLAB string array)
    - `ET === Char && ND == 2` → `CharMatrixMarshaler`
    - `_is_user_struct(ET)` → `StructArrayMarshaler{ET, ND}` (any rank; `StructVectorMarshaler`/`StructMatrixMarshaler` are aliases for N=1/N=2)
 3. `T <: Tuple` — comes **after** the Array block and **before** `_is_user_struct`.
@@ -154,9 +155,28 @@ const _CellProbe = Tuple{Float64, Int64}
 `marshaler_for(Tuple{ComplexF64})` succeeds; the error (if `ComplexF64` is
 unsupported as a cell element) surfaces only when the `@generated` body runs.
 
+### `StringArrayMarshaler` — `Matrix{String}` ↔ MATLAB string array (`src/marshaling.jl`)
+
+MATLAB's `string` array (R2016b+) is **opaque** in the legacy C Matrix API — there
+is no `mxSTRING_CLASS` (the enum stops at `mxOBJECT_CLASS = 18`) and no create/get
+for it. The marshaler bridges through a cell-of-char using MATLAB's own builtins via
+`mex_call_matlab_1` (a 1-in/1-out `mexCallMATLAB` wrapper, `src/api.jl`):
+
+- **load**: `mexCallMATLAB("cellstr", strArr)` → cell of char, then `mx_get_string`
+  per element.
+- **output**: build a cell of char, then `mexCallMATLAB("string", cell)` → string
+  array. Asymmetric like `String` — `store!` is a no-op and `create` is a placeholder;
+  the real output is a `store_result(::Matrix{String})` override (concrete
+  `Matrix{String}`, so it does not capture `Vector{String}` → cell).
+
+Mapping is **Option B**: `Matrix{String}` → string array, `Vector{String}` → cell.
+A "1-D" MATLAB string array is really `1×N`, so it round-trips as a `1×N Matrix{String}`.
+If this split becomes awkward, switch to a wrapper type (Option A) — the bridge is
+reused, only the dispatch type changes.
+
 ### libmx stub (`test/matlab/libmx_stub/libmx_stub.c`)
 
-~430-line C file. Key struct:
+~470-line C file. Key struct:
 
 ```c
 typedef struct _mx_stub {
@@ -171,14 +191,17 @@ typedef struct _mx_stub {
 ```
 
 All function names are bare (no `_730` suffix) because on Linux `@mxccall730`
-expands to bare names. `element_size(MX_CHAR_CLASS)` returns 2 (uint16_t per
-element). `mxCreateCharArray(ndim, dims)` allocates `pr` as `uint16_t[nelems]`;
-`mxGetChars(pa)` returns `uint16_t *pr`. `mxCreateStructArray(ndim, dims, …)` is the
-N-D struct array (field storage `[nfields × nelems]`, same as the 2-D
-`mxCreateStructMatrix`). `mxGetScalar` converts the first element **per its
-mxClassID** (int/logical/char are not double-encoded) — a raw `double` reinterpret
-would corrupt non-double scalar/struct fields. `mxDestroyArray` recurses into struct
-fields and cell children. `mxDuplicateArray` performs a deep copy.
+expands to bare names. **Char data is `uint16_t` (mxChar) everywhere** —
+`mxCreateString`, `mxCreateCharArray`, `mxGetString`, `mxGetChars` all agree, and
+`element_size(MX_CHAR_CLASS)` returns 2, so `deep_copy` is byte-correct for char
+arrays. `mxCreateStructArray(ndim, dims, …)` is the N-D struct array (field storage
+`[nfields × nelems]`, same as the 2-D `mxCreateStructMatrix`). `mxGetScalar` converts
+the first element **per its mxClassID** (int/logical/char are not double-encoded) — a
+raw `double` reinterpret would corrupt non-double scalar/struct fields.
+`mexCallMATLAB` is faked for only the two builtins the string-array marshaler uses:
+`"string"` (cell → opaque `MX_STRING_CLASS` wrapping the same cells) and `"cellstr"`
+(string array → cell); both copy shape and deep-copy elements. `mxDestroyArray`
+recurses into struct fields and cell children. `mxDuplicateArray` performs a deep copy.
 `mexErrMsgIdAndTxt` calls `abort()` — marshaler errors surface as Julia exceptions
 in unit tests, so this path is never reached.
 

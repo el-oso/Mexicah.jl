@@ -53,4 +53,5 @@ end
 # Cell array marshaler — @generated over the element types, same trim-safe pattern.
 @verify CellArrayMarshaler{_CellProbe} trim_compat = true
 @verify StringVectorMarshaler trim_compat = true
+@verify StringArrayMarshaler trim_compat = true
 @verify CharMatrixMarshaler trim_compat = true
