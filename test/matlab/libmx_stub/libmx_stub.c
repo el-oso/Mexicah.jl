@@ -214,6 +214,24 @@ mxArray mxCreateStructMatrix(size_t m, size_t n, int nfields, const char **field
     return p;
 }
 
+/* N-D struct array; field storage stays [nfields × nelems], same as the 2-D form. */
+mxArray mxCreateStructArray(size_t ndim, const size_t *dims, int nfields, const char **fieldnames) {
+    mx_stub_t *p = alloc_stub();
+    p->classid   = MX_STRUCT_CLASS;
+    p->ndim      = ndim;
+    p->dims      = (size_t *)malloc(ndim * sizeof(size_t));
+    memcpy(p->dims, dims, ndim * sizeof(size_t));
+    p->m         = ndim >= 1 ? dims[0] : 1;
+    p->n         = ndim >= 2 ? dims[1] : 1;
+    p->nelems    = prod(ndim, dims);
+    p->nfields   = nfields;
+    p->fieldnames = (char **)malloc(nfields * sizeof(char *));
+    for (int i = 0; i < nfields; i++)
+        p->fieldnames[i] = strdup(fieldnames[i]);
+    p->fields = (mx_stub_t **)calloc((size_t)nfields * p->nelems, sizeof(mx_stub_t *));
+    return p;
+}
+
 mxArray mxCreateCellMatrix(size_t m, size_t n) {
     mx_stub_t *p = alloc_stub();
     p->classid   = MX_CELL_CLASS;
@@ -368,7 +386,26 @@ int mxIsCell(const mxArray pa)      { return pa->classid == MX_CELL_CLASS;   }
 
 double *mxGetPr(const mxArray pa)       { return (double *)pa->pr; }
 double *mxGetPi(const mxArray pa)       { return (double *)pa->pi; }
-double  mxGetScalar(const mxArray pa)   { return pa->pr ? *(double *)pa->pr : 0.0; }
+/* Faithful to MATLAB: read the first element per its class and return as double
+ * (NOT a raw double reinterpret — int/logical/char data is not double-encoded). */
+double mxGetScalar(const mxArray pa) {
+    if (!pa || !pa->pr) return 0.0;
+    switch (pa->classid) {
+        case MX_DOUBLE_CLASS:  return *(double *)pa->pr;
+        case MX_SINGLE_CLASS:  return (double)*(float *)pa->pr;
+        case MX_INT8_CLASS:    return (double)*(int8_t *)pa->pr;
+        case MX_UINT8_CLASS:   return (double)*(uint8_t *)pa->pr;
+        case MX_INT16_CLASS:   return (double)*(int16_t *)pa->pr;
+        case MX_UINT16_CLASS:  return (double)*(uint16_t *)pa->pr;
+        case MX_INT32_CLASS:   return (double)*(int32_t *)pa->pr;
+        case MX_UINT32_CLASS:  return (double)*(uint32_t *)pa->pr;
+        case MX_INT64_CLASS:   return (double)*(int64_t *)pa->pr;
+        case MX_UINT64_CLASS:  return (double)*(uint64_t *)pa->pr;
+        case MX_LOGICAL_CLASS: return (double)*(uint8_t *)pa->pr;
+        case MX_CHAR_CLASS:    return (double)*(uint16_t *)pa->pr;
+        default:               return *(double *)pa->pr;
+    }
+}
 void   *mxGetData(const mxArray pa)     { return pa->pr; }
 void   *mxGetImagData(const mxArray pa) { return pa->pi; }
 unsigned char *mxGetLogicals(const mxArray pa) { return (unsigned char *)pa->pr; }

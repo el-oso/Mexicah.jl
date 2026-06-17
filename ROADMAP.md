@@ -5,11 +5,11 @@ feasibility notes, and a code audit (2026-06-16). Ordered by priority within eac
 section; **Section 1 (correctness/robustness) should come first** — those are
 latent defects, the rest are features and polish.
 
-## Status (v0.22.0)
+## Status (v0.23.0)
 
 - End-to-end MATLAB CI is green and blocking on Linux, Windows, and macOS:
   19 asserted fixtures in one session + sparse (including complex and logical), per OS.
-- Full Julia test suite green (81 tests, 253 assertions); docs build clean.
+- Full Julia test suite green (82 tests, 257 assertions); docs build clean.
 - `:matlab`-tagged marshaler round-trips now run in regular CI (without MATLAB) via
   the `libmx_stub.so` preloaded on Linux runners.
 - Marshaler coverage: real-numeric scalars (`Float64/Float32`, `Int8/16/32/64`,
@@ -17,10 +17,22 @@ latent defects, the rest are features and polish.
   type and rank, logical `Array{Bool,N}`, `SparseMatrixCSC{Float64,Int}`,
   `SparseMatrixCSC{ComplexF64,Int}`, `SparseMatrixCSC{Bool,Int}`,
   complex `Array{ComplexF64,N}` **and `Array{ComplexF32,N}`**, flat
-  `struct`/`NamedTuple` (in & out), **`Vector{<struct>}` ↔ N×1 struct array**,
-  **`Matrix{<struct>}` ↔ M×N struct array**, `Tuple{A,B,…}` ↔ 1×N cell array,
-  `Vector{String}` ↔ N×1 cell of char, **`Matrix{Char}` ↔ M×N char array**,
+  `struct`/`NamedTuple` (in & out), **`Array{<struct>,N}` ↔ N-D struct array of
+  any rank** (Vector → N×1, Matrix → M×N, 3-D+ → N-D), `Tuple{A,B,…}` ↔ 1×N cell
+  array, `Vector{String}` ↔ N×1 cell of char, `Matrix{Char}` ↔ M×N char array,
   `String`, `UInt64` handles, and multiple outputs.
+
+## Recently completed (v0.23.0)
+
+- **§1 coverage:** N-D struct arrays — `Array{S,N}` for any rank ↔ MATLAB N-D
+  struct array. Unified `StructVectorMarshaler` (N=1) and `StructMatrixMarshaler`
+  (N=2) into a single `StructArrayMarshaler{T,N}` paralleling
+  `DenseArrayMarshaler{T,N}`; the old names are kept as type aliases
+  (`StructArrayMarshaler{T,1}` / `{T,2}`). New `mxCreateStructArray` API wrapper +
+  stub function for N≥3. Tested via libmx stub with a 2×2×2 round-trip.
+- **stub fidelity:** `mxGetScalar` now converts the first element per its mxClassID
+  (was a raw `double` reinterpret) — fixes int/logical/char fields read back through
+  `mxGetScalar`. Surfaced by the first stub round-trip with an `Int64` struct field.
 
 ## Recently completed (v0.22.0)
 
@@ -76,9 +88,6 @@ latent defects, the rest are features and polish.
 
 - **MATLAB `string` arrays** (R2016b+ `string` type, `mxSTRING_CLASS`) — distinct
   from char arrays; requires a different C API and a new stub classid. Deferred.
-- **N-D struct arrays** (`Array{S,N}` for N≥3) — `Vector{S}` (N=1) and `Matrix{S}`
-  (N=2) are done; higher ranks need `mxCreateStructArray` (not just
-  `mxCreateStructMatrix`).
 
 ## 2. Distribution
 
@@ -121,7 +130,7 @@ available.
 
 ## Notes for future sessions
 
-- **Test count:** 81 tests, 253 assertions (v0.22.0). Baseline for regression checks.
+- **Test count:** 82 tests, 257 assertions (v0.23.0). Baseline for regression checks.
 - **libmx stub** (`test/matlab/libmx_stub/libmx_stub.c`, ~430 lines) must be rebuilt
   locally before running tests without MATLAB:
   `cc -O2 -shared -fPIC -o test/matlab/libmx_stub/libmx_stub.so test/matlab/libmx_stub/libmx_stub.c`
@@ -132,9 +141,10 @@ available.
   `@mxccall730` on Windows — bare names resolve to the obsolete 32-bit API.
   Functions that are pure type/metadata queries use `@mxccall`.
 - **`marshaler_for` dispatch order** (invariant — do not reorder):
-  exact sparse → `T <: Array` block (Vector/Matrix{String}, Matrix{Char},
-  Vector{S}/Matrix{S} struct) → `T <: Tuple` → `_is_user_struct`.
-  Tuples must come before `_is_user_struct` because `isstructtype(Tuple{…})` is `true`.
+  exact sparse → `T <: Array` block (String vector, Matrix{Char},
+  `Array{S,N}` struct via `StructArrayMarshaler{ET,ND}`) → `T <: Tuple` →
+  `_is_user_struct`. Tuples must come before `_is_user_struct` because
+  `isstructtype(Tuple{…})` is `true`.
 - **Static dispatch in `@generated` bodies**: call `marshaler_for(fieldtype(T,k))`
   in the *code-generation phase* (before `return`), interpolate `typeof(m)` into the
   generated AST — never emit `marshaler_for($(SomeType))` as a runtime call.

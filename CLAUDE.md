@@ -108,8 +108,7 @@ Order matters — later branches are not reached if an earlier one matches:
    - Bool/Complex/DenseNumeric element types
    - `ET === String && ND == 1` → `StringVectorMarshaler`
    - `ET === Char && ND == 2` → `CharMatrixMarshaler`
-   - `ND == 1 && _is_user_struct(ET)` → `StructVectorMarshaler{ET}`
-   - `ND == 2 && _is_user_struct(ET)` → `StructMatrixMarshaler{ET}`
+   - `_is_user_struct(ET)` → `StructArrayMarshaler{ET, ND}` (any rank; `StructVectorMarshaler`/`StructMatrixMarshaler` are aliases for N=1/N=2)
 3. `T <: Tuple` — comes **after** the Array block and **before** `_is_user_struct`.
    Critical: `isstructtype(Tuple{...})` returns `true`, so if the user-struct branch
    ran first it would swallow all Tuple types.
@@ -122,9 +121,9 @@ Same ordering constraint: the `T <: Tuple` branch must appear **before** the
 
 ### Static dispatch in `@generated` bodies (`src/marshaling.jl`)
 
-All `@generated` marshalers (`StructMarshaler`, `StructVectorMarshaler`,
-`StructMatrixMarshaler`, `CellArrayMarshaler`) resolve field marshalers at
-**code-generation time**, not at runtime. The pattern:
+All `@generated` marshalers (`StructMarshaler`, `StructArrayMarshaler{T,N}`,
+`CellArrayMarshaler`) resolve field marshalers at **code-generation time**, not at
+runtime. The pattern:
 
 ```julia
 # Code-gen phase (before `return`):
@@ -174,7 +173,11 @@ typedef struct _mx_stub {
 All function names are bare (no `_730` suffix) because on Linux `@mxccall730`
 expands to bare names. `element_size(MX_CHAR_CLASS)` returns 2 (uint16_t per
 element). `mxCreateCharArray(ndim, dims)` allocates `pr` as `uint16_t[nelems]`;
-`mxGetChars(pa)` returns `uint16_t *pr`. `mxDestroyArray` recurses into struct
+`mxGetChars(pa)` returns `uint16_t *pr`. `mxCreateStructArray(ndim, dims, …)` is the
+N-D struct array (field storage `[nfields × nelems]`, same as the 2-D
+`mxCreateStructMatrix`). `mxGetScalar` converts the first element **per its
+mxClassID** (int/logical/char are not double-encoded) — a raw `double` reinterpret
+would corrupt non-double scalar/struct fields. `mxDestroyArray` recurses into struct
 fields and cell children. `mxDuplicateArray` performs a deep copy.
 `mexErrMsgIdAndTxt` calls `abort()` — marshaler errors surface as Julia exceptions
 in unit tests, so this path is never reached.

@@ -227,6 +227,24 @@ function mx_create_struct_matrix(m::Csize_t, n::Csize_t, fieldnames::Vector{Stri
     end
 end
 
+# N-D struct array. Takes mwSize ndim + dims pointer → @mxccall730 (large-array
+# family, like mx_create_numeric_array). `dims` must point to live Csize_t storage.
+function mx_create_struct_array(ndim::Csize_t, dims::Ptr{Csize_t}, fieldnames::Vector{String})::MxArray
+    cnames = [vcat(codeunits(s), UInt8(0)) for s in fieldnames]
+    ptrs = pointer.(cnames)
+    GC.@preserve cnames begin
+        return @mxccall730 ccall(
+            :mxCreateStructArray,
+            MxArray,
+            (Csize_t, Ptr{Csize_t}, Cint, Ptr{Ptr{UInt8}}),
+            ndim,
+            dims,
+            Cint(length(fieldnames)),
+            ptrs,
+        )
+    end
+end
+
 # ── Cell arrays ───────────────────────────────────────────────────────────────
 # mxGetCell / mxSetCell take a linear (0-based) mwIndex. The creation function
 # takes mwSize m and n. Both are in the 64-bit large-array family → @mxccall730.

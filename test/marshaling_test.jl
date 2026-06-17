@@ -106,12 +106,14 @@ end
     @test Mexicah.marshaler_for(@NamedTuple{a::Float64, n::Int64}) isa
         Mexicah.StructMarshaler
     @test Mexicah.mx_class_id(Mexicah.StructMarshaler{Pt}()) == Mexicah.mxSTRUCT_CLASS
-    # Vector of structs → N×1 MATLAB struct array
+    # Array of structs → N-D MATLAB struct array (one StructArrayMarshaler{T,N});
+    # StructVectorMarshaler/StructMatrixMarshaler are aliases for N=1/N=2.
     @test Mexicah.marshaler_for(Vector{Pt}) isa Mexicah.StructVectorMarshaler{Pt}
-    @test Mexicah.mx_class_id(Mexicah.StructVectorMarshaler{Pt}()) == Mexicah.mxSTRUCT_CLASS
-    # Matrix of structs → M×N MATLAB struct array
+    @test Mexicah.marshaler_for(Vector{Pt}) isa Mexicah.StructArrayMarshaler{Pt, 1}
     @test Mexicah.marshaler_for(Matrix{Pt}) isa Mexicah.StructMatrixMarshaler{Pt}
-    @test Mexicah.mx_class_id(Mexicah.StructMatrixMarshaler{Pt}()) == Mexicah.mxSTRUCT_CLASS
+    @test Mexicah.marshaler_for(Matrix{Pt}) isa Mexicah.StructArrayMarshaler{Pt, 2}
+    @test Mexicah.marshaler_for(Array{Pt, 3}) isa Mexicah.StructArrayMarshaler{Pt, 3}
+    @test Mexicah.mx_class_id(Mexicah.StructArrayMarshaler{Pt, 3}()) == Mexicah.mxSTRUCT_CLASS
     # Not struct-marshaled: Complex scalar (a Number) is excluded;
     # Tuple now routes to CellArrayMarshaler (no longer an error here).
     @test_throws ErrorException Mexicah.marshaler_for(ComplexF64)
@@ -215,5 +217,21 @@ end
     got = Mexicah.load(m, pa)
     @test size(got) == (2, 3)
     @test got == src
+    Mexicah.mx_destroy_array(pa)
+end
+
+@testitem "StructArrayMarshaler 2×2×2 (3-D) round-trip" tags = [:matlab] begin
+    using Mexicah, Test
+    struct Cell3
+        a::Float64
+        b::Int64
+    end
+    m = Mexicah.StructArrayMarshaler{Cell3, 3}()
+    src = [Cell3(Float64(i + 10j + 100k), i * j * k) for i in 1:2, j in 1:2, k in 1:2]
+    pa = Mexicah.create(m, (2, 2, 2))
+    Mexicah.store!(m, pa, src)
+    got = Mexicah.load(m, pa)
+    @test size(got) == (2, 2, 2)
+    @test all(got[idx] == src[idx] for idx in eachindex(src))
     Mexicah.mx_destroy_array(pa)
 end
