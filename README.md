@@ -81,3 +81,7 @@ Planned work and known issues: see [ROADMAP.md](ROADMAP.md).
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Acknowledgements
+
+This package was developed with assistance from [Claude](https://claude.ai) (Anthropic). All generated code has been reviewed and is maintained by the author.
