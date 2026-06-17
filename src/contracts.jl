@@ -14,44 +14,17 @@ end
     output_types(::Self)::Tuple => "Concrete output types as a Tuple type"
 end
 
-# Verify all concrete marshalers satisfy the contract at precompile time.
-# trim_compat=true additionally scans each implementation method's IR for calls
-# that are incompatible with juliac --trim=safe (e.g. Base.return_types).
-@verify Float64Marshaler trim_compat = true
-@verify VectorFloat64Marshaler trim_compat = true
-@verify MatrixFloat64Marshaler trim_compat = true
-@verify Int32Marshaler trim_compat = true
-@verify Int64Marshaler trim_compat = true
-@verify UInt64Marshaler trim_compat = true
-@verify BoolMarshaler trim_compat = true
-@verify SparseFloat64Marshaler trim_compat = true
-@verify SparseComplexF64Marshaler trim_compat = true
-@verify SparseLogicalMarshaler trim_compat = true
-@verify ComplexFloat64Marshaler trim_compat = true
-@verify StringMarshaler trim_compat = true
-# Additional real numeric scalars
-@verify Float32Marshaler trim_compat = true
-@verify Int8Marshaler trim_compat = true
-@verify Int16Marshaler trim_compat = true
-@verify UInt8Marshaler trim_compat = true
-@verify UInt16Marshaler trim_compat = true
-@verify UInt32Marshaler trim_compat = true
-# Parametric array marshalers — verify representative instantiations (the methods
-# are defined for all T/N, so one concrete instance proves the contract).
-@verify DenseArrayMarshaler{Float64, 2} trim_compat = true
-@verify DenseArrayMarshaler{Int32, 1} trim_compat = true
-@verify DenseArrayMarshaler{Float32, 3} trim_compat = true
-@verify ComplexArrayMarshaler{2} trim_compat = true
-@verify ComplexF32ArrayMarshaler{2} trim_compat = true
-@verify LogicalArrayMarshaler{2} trim_compat = true
-# Struct marshaler — verified on a concrete fixture struct (its load/store/create
-# are @generated, so this instantiates and scans the generated code).
-@verify StructMarshaler{_StructProbe} trim_compat = true
-@verify StructVectorMarshaler{_StructProbe} trim_compat = true
-@verify StructMatrixMarshaler{_StructProbe} trim_compat = true
-@verify StructArrayMarshaler{_StructProbe, 3} trim_compat = true
-# Cell array marshaler — @generated over the element types, same trim-safe pattern.
-@verify CellArrayMarshaler{_CellProbe} trim_compat = true
-@verify StringVectorMarshaler trim_compat = true
-@verify StringArrayMarshaler trim_compat = true
-@verify CharMatrixMarshaler trim_compat = true
+
+# Contract verification (structural — marshalers implement AbstractMexMarshaler
+# via Holy-Trait dispatch and do NOT subtype it) lives in test/contracts_test.jl,
+# which runs `check_contract(T, AbstractMexMarshaler)` + `check_trim_compat(...)`
+# for every marshaler POST-LOAD. Two reasons it is not done here at precompile:
+#   1. A one-arg `@verify Marshaler` would walk `supertypes(Marshaler)`, find no
+#      contract specs (the marshaler doesn't subtype the contract), and pass — and
+#      trim-scan — vacuously. The structural two-arg form (TypeContracts ≥ 0.13.1,
+#      `for_contract=`) is required to check against the named contract.
+#   2. The two-arg check calls `Base.return_types`, which is world-age-fragile on
+#      the @generated marshalers (Struct*/Cell*) when run inside this module's own
+#      precompilation — it widens `store!`'s return to `Any` and spuriously fails,
+#      even though the same check passes once the module is fully loaded. Running it
+#      in the test suite (post-load) verifies all marshalers reliably.

@@ -79,7 +79,7 @@ Core src additions:
 - All `store!` methods in `marshaling.jl` use `::Any` as the third argument so `hasmethod` in TypeContracts contracts returns `true` for any marshaler value type.
 - All `create` methods use `::Tuple` (not `::Dims{N}`) for the same reason.
 - `@mexfunction` macro: `_extract_argtypes` uses `Any[]` (not `Expr[]`) because Julia type names in function signatures are `Symbol`s, not `Expr`s.
-- All `@verify` calls in `contracts.jl` use `trim_compat=true` to scan implementation IR for juliac --trim=safe incompatibilities.
+- **Contract verification is structural and lives in `test/contracts_test.jl`, not `contracts.jl`.** Marshalers implement `AbstractMexMarshaler` via Holy-Trait dispatch and do NOT subtype it, so a one-arg `@verify Marshaler` is a vacuous no-op (it scans `supertypes`, finds no specs, passes). The test suite uses the two-arg `check_contract(T, AbstractMexMarshaler)` + `check_trim_compat(T, AbstractMexMarshaler)` (TypeContracts ≥ 0.13.1's `for_contract` path) for every marshaler, post-load — `Base.return_types` on the `@generated` marshalers is world-age-fragile during the defining module's own precompile, so it must run after load. When adding a marshaler, add it to that testitem's list.
 - **`return` in `@testitem` does NOT work**: ReTestItems evaluates each top-level statement in the testitem body as a SEPARATE `eval` call, so `&&return` exits only the current statement's eval, not the entire test. Use `if (...) ... end` blocks to skip optional-package tests instead.
 
 ## Marshaling internals
@@ -207,5 +207,7 @@ in unit tests, so this path is never reached.
 
 ## TypeContracts dependency
 
-Registered in the Julia General registry as `TypeContracts 0.13`. Both `Project.toml`
-and `test/Project.toml` resolve it from General — no `[sources]` entries needed.
+Registered in the Julia General registry; Mexicah requires `0.13.1` (for the
+structural two-arg `check_contract(T, I)` / `@verify ... for_contract=` used to
+verify the marshalers, which don't subtype the contract). Both `Project.toml` and
+`test/Project.toml` resolve it from General — no `[sources]` entries needed.

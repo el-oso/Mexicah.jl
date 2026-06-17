@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "85e3b6cd555cea35874c092ecba9a5a301249f5d"
+project_hash = "4578afa9293cdf8ced813484f85d7bc65567ea14"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -45,7 +45,7 @@ version = "1.11.0"
 deps = ["LinearAlgebra", "SparseArrays", "TypeContracts"]
 path = "."
 uuid = "28b42ba6-5630-446f-bcf8-82236b20fd10"
-version = "0.21.0"
+version = "0.24.0"
 
     [deps.Mexicah.extensions]
     MexicahCUDAExt = ["CUDA", "KernelAbstractions"]
@@ -98,9 +98,9 @@ version = "7.8.3+2"
 
 [[deps.TypeContracts]]
 deps = ["InteractiveUtils"]
-git-tree-sha1 = "58f93c700087d3a21bb6228cf2397ca0ab1cb70b"
+git-tree-sha1 = "6af468adad2a4b15b31c7d3098ffd0cbfae21a6f"
 uuid = "c7a3f1e2-84b5-4d69-9e0a-1f2b3c4d5e6f"
-version = "0.13.0"
+version = "0.13.1"
 
     [deps.TypeContracts.extensions]
     TypeContractsDocumenterExt = ["Documenter", "Markdown"]

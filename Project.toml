@@ -1,6 +1,6 @@
 name = "Mexicah"
 uuid = "28b42ba6-5630-446f-bcf8-82236b20fd10"
-version = "0.24.0"
+version = "0.24.1"
 authors = ["el-oso <el-oso@users.noreply.github.com>"]
 
 [deps]
@@ -35,7 +35,7 @@ KernelAbstractions = "0.9"
 LinearAlgebra = "1"
 ModelingToolkit = "9, 10"
 SparseArrays = "1"
-TypeContracts = "0.13"
+TypeContracts = "0.13.1"
 julia = "1.12"
 
 [apps.mexicah]
