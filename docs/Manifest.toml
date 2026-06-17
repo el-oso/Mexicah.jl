@@ -368,9 +368,7 @@ version = "0.11.3"
 
 [[deps.TypeContracts]]
 deps = ["InteractiveUtils"]
-git-tree-sha1 = "889ec75ecbe2f157c0ddbc44c3fcd158c1038d74"
-repo-rev = "master"
-repo-url = "https://github.com/el-oso/TypeContracts.jl"
+git-tree-sha1 = "58f93c700087d3a21bb6228cf2397ca0ab1cb70b"
 uuid = "c7a3f1e2-84b5-4d69-9e0a-1f2b3c4d5e6f"
 version = "0.13.0"
 
