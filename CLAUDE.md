@@ -206,10 +206,12 @@ recurses into struct fields and cell children. `mxDuplicateArray` performs a dee
 in unit tests, so this path is never reached. The stub also tracks a live-array count
 (`g_mx_live`, incremented in `alloc_stub`/`deep_copy`, decremented in `mxDestroyArray`)
 exposed via the non-`mx`-prefixed `mx_stub_live_count()` / `mx_stub_reset_count()`;
-the leak-regression test (`test/marshaling_test.jl`) samples it across success and
-throwing paths to catch a leak-on-error (the MATLAB-less analogue of ParselTongue's
-ASan/LSan gate). Each child counted individually, so a fully-destroyed parent nets
-back to baseline.
+the regression test (`test/marshaling_test.jl`) samples it across success and throwing
+paths. Note the stub **does not** emulate MATLAB's return-time auto-free of temporary
+`mxArray`s, so it is intentionally *stricter* than real MATLAB — the counter is a
+**temporary-cleanup-discipline guard** (catches a marshaler that orphans a temporary),
+not a real-MATLAB leak detector (see the Memory-safety section). Each child counted
+individually, so a fully-destroyed parent nets back to baseline.
 
 ## TypeContracts dependency
 
@@ -218,53 +220,61 @@ structural two-arg `check_contract(T, I)` / `@verify ... for_contract=` used to
 verify the marshalers, which don't subtype the contract). Both `Project.toml` and
 `test/Project.toml` resolve it from General — no `[sources]` entries needed.
 
-## Memory-safety: RAII scope-guard cleanup (audit done — applied)
+## Memory-safety: explicit temporary cleanup (best-practice hygiene, not a leak fix)
 
-**Status: audited and fixed.** The Julia-side analogue of ParselTongue's
-`__attribute__((cleanup))` is `try/finally` guards in the marshalers; three genuine
-leak-on-error (and two leak-*always*) paths were found and fixed in `src/marshaling.jl`.
+**Crucial context first — Mexicah has no cross-call `mxArray` leaks, by construction.**
+MATLAB's MEX memory manager **automatically destroys every temporary `mxArray`** (one
+created with `mxCreate*` and *not* returned in `plhs`) when the MEX-function returns —
+**including when it errors out** (`mexErrMsgIdAndTxt` longjmps and MATLAB frees
+temporaries during the unwind). A full audit confirmed nothing escapes that net:
 
-The sibling project ParselTongue (`../parseltongue`) used the C attribute directly
-because it *generates the marshalling C*. Mexicah marshals **in Julia** (`@generated`
-`load`/`store!`/`create` + `ccall` to libmx); its only generated C is the gateway
-(`src/build.jl`, `dlopen` only — nothing to guard). So the C attribute does not apply;
-`try/finally` is the idiomatic, trim-safe equivalent (a `Bool` flag + concrete
-`mx_destroy_array` call — no dynamic dispatch, passes `check_trim_compat`).
+- **No `mexMakeArrayPersistent`, `mxMalloc`, `mxCalloc`, `mxRealloc`** anywhere in
+  `src/`/`ext/` → no persistent `mxArray` or raw buffer survives a call.
+- The **handle registry** (`handles.jl`) stores **Julia objects** (`Dict{UInt64,Any}`),
+  **not** `mxArray`s. (Those Julia objects live until the MATLAB user calls
+  `destroy_*` → `_handle_delete!` — that is the *one* place memory grows across calls,
+  by design, and is unrelated to `mxArray` lifetime.)
+- Every `mxCreate*` site (`marshaling.jl`, DataFrames ext) yields a call-scoped
+  temporary or an array handed to `plhs` / attached to a returned parent.
+
+So the `try/finally` guards added to the marshalers are **explicit best-practice
+cleanup**, *not* fixes for real leaks: MathWorks recommends destroying temporaries you
+no longer need (especially inside loops) to cap **peak memory**, and being explicit on
+error paths is defensive and forward-proofs any future persistent/caching path (where
+MATLAB's auto-free would *not* save you). They are the Julia-idiomatic, trim-safe
+analogue of ParselTongue's `__attribute__((cleanup))` (a `Bool` flag + concrete
+`mx_destroy_array` call — no dynamic dispatch, passes `check_trim_compat`). ParselTongue
+*needed* its guards because CPython does **not** auto-free extension-owned allocations;
+MATLAB does, so here the benefit is peak-memory + robustness, not leak prevention.
 
 **Ownership model (confirmed against the libmx stub, matches MATLAB):**
 `mxSetField`/`mxSetCell` *transfer* ownership of the child to the parent (and destroy
 any previous occupant); `mxDestroyArray` recurses into fields/cells; MATLAB owns
 `plhs[i]` only *after* `unsafe_store!` hands it over; `mexCallMATLAB` does **not** take
-ownership of its inputs — the caller must destroy them.
+ownership of its inputs — the caller owns them (MATLAB still auto-frees them at return).
 
-**Audit results (per allocation in `src/marshaling.jl`):**
-- Scalar/array `create`+`store!` (Float64, Int, Bool, Dense*, Complex*, Sparse*,
-  Char, StringVector): leaf marshalers; their `store!` cannot throw after allocating an
-  owned intermediate, so the generic `store_result` guard (below) covers them. Safe.
-- `store_result` (generic): `pa = create(...)` then `store!(...)`. If `store!` throws,
-  `pa` (and any already-attached children) was orphaned → **leak-on-error**. Fixed with
-  an `owned` flag + `try/finally`; `owned=false` after `unsafe_store!` "disarms" the
-  guard once MATLAB takes ownership (the ParselTongue `ArgPlan.disarm` move).
-- `store_result(::Matrix{String})`: `cell` is only ever a `mexCallMATLAB` input, so it
-  is the caller's to destroy — it leaked on **every** call (and on a mid-loop throw).
-  Fixed with `try/finally` destroying `cell`.
-- `load(::StringArrayMarshaler)`: `cell` from `mexCallMATLAB("cellstr")` is a
-  caller-owned output that was never destroyed → leaked on **every** load. Fixed with
-  `try/finally`.
-- Composite `store!` (`StructMarshaler`, `StructArrayMarshaler`, `CellArrayMarshaler`):
-  per element/field, a child `fpa = create(...)` then `store!(...)` then set. A throw
-  from the nested `store!` orphaned `fpa` *before* the parent owned it →
-  **leak-on-error**. Fixed with an `attached` flag + `try/finally` around each
-  child (the `@generated` bodies emit the guard). The String-field fast paths
-  (`mx_set_field!(pa, …, mx_create_string(…))`) have no intermediate variable — if
-  `mx_create_string` throws nothing was allocated — so they need no guard.
+**What each guard does (per allocation in `src/marshaling.jl`):**
+- `store_result` (generic): `owned` flag + `try/finally`; frees `pa` if `store!` throws
+  before `unsafe_store!`, then `owned=false` "disarms" once MATLAB takes ownership.
+- `store_result(::Matrix{String})` / `load(::StringArrayMarshaler)`: the `cell`
+  `mexCallMATLAB` input/output is destroyed promptly in `finally` instead of waiting for
+  MATLAB's return-time sweep (peak memory; still freed without the guard).
+- Composite `store!` (`StructMarshaler`/`StructArrayMarshaler`/`CellArrayMarshaler`):
+  `attached` flag + `try/finally` per child `fpa`, freed promptly if the nested `store!`
+  throws before `mxSetField`/`mxSetCell` transfers ownership. String-field fast paths
+  (`mx_set_field!(pa, …, mx_create_string(…))`) have no intermediate to guard.
+- Leaf scalar/array marshalers can't throw after allocating an owned intermediate, so
+  the generic `store_result` guard already covers them.
 
-**Leak regression check:** `test/marshaling_test.jl` testitem
-`"leak-regression: store_result frees intermediates on success + error"` (tagged
-`:matlab`). The libmx stub now exports `mx_stub_live_count()`/`mx_stub_reset_count()`
-(a live-array counter incremented in `alloc_stub`/`deep_copy`, decremented in
-`mxDestroyArray`). The test samples the count across clean round trips and across
-throwing paths (a struct/struct-array with a `String` field carrying an embedded NUL,
-which makes `mxCreateString`'s `Cstring` conversion throw *after* the parent + a vector
-child are allocated) and asserts it nets back to baseline. Teeth-checked: nulling the
-`store_result` guard makes the test fail; restoring it passes.
+**Regression check (discipline guard, *not* a MATLAB-leak detector):**
+`test/marshaling_test.jl` testitem `"leak-regression: store_result frees intermediates
+on success + error"` (tagged `:matlab`). The libmx stub exports
+`mx_stub_live_count()`/`mx_stub_reset_count()` (a live-array counter). **The stub
+deliberately does *not* model MATLAB's return-time auto-free, so it is stricter than
+real MATLAB** — that makes it a useful guard that catches a future marshaler which
+orphans a temporary without destroying it (under the stub it shows as a non-zero net;
+in real MATLAB it would merely raise peak memory). The test samples the count across
+clean round trips and throwing paths (a `String` field with an embedded NUL forces
+`mxCreateString`'s `Cstring` conversion to throw mid-`store!`) and asserts it nets to
+baseline. Teeth-checked: nulling a guard makes it fail; restoring it passes. Do **not**
+read a failure as "MATLAB leaked" — read it as "a temporary wasn't explicitly freed."

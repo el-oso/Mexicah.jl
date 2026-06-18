@@ -253,17 +253,20 @@ end
     end
 end
 
-# ── Leak-regression: marshalers must free owned intermediates on EVERY exit ────
-# Mirrors ParselTongue's ASan leak gate, MATLAB-free: the libmx stub counts live
-# mx_stub_t arrays via mx_stub_live_count(). A round trip (incl. the throwing path)
-# must net back to the starting count — no orphaned intermediate mxArray.
+# ── Temporary-cleanup discipline guard (NOT a real-MATLAB leak detector) ───────
+# The libmx stub counts live mx_stub_t arrays via mx_stub_live_count(). The stub does
+# NOT emulate MATLAB's auto-free of temporaries at MEX return, so it is intentionally
+# stricter than MATLAB: a round trip (incl. the throwing path) must net back to the
+# starting count, which catches a marshaler that orphans a temporary without destroying
+# it. In real MATLAB such a temporary is reclaimed at return — explicit cleanup is
+# peak-memory/robustness hygiene, not a leak fix (see CLAUDE.md Memory-safety section).
 @testitem "leak-regression: store_result frees intermediates on success + error" tags = [:matlab] begin
     using Mexicah, Test
 
     # `_LeakS` has a Vector field (so an intermediate child mxArray is created and
     # attached) followed by a String field carrying an embedded NUL, which makes
     # mx_create_string's Cstring conversion throw *after* the parent struct + the
-    # vector child are allocated — the canonical leak-on-error shape.
+    # vector child are allocated — the canonical mid-store! throw shape.
     struct _LeakS
         v::Vector{Float64}
         s::String
@@ -279,7 +282,8 @@ end
     @test live() == base
 
     # 1. Clean Matrix{String} round trip nets to baseline (load + store_result both
-    #    own a mexCallMATLAB array that must be destroyed — previously leaked always).
+    #    own a mexCallMATLAB array now destroyed promptly; under this strict stub it
+    #    showed as a non-zero net before the guard — in MATLAB it freed at return).
     base = live()
     slot = Ref{Mexicah.MxArray}(C_NULL)
     GC.@preserve slot begin

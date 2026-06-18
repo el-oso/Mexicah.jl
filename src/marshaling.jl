@@ -607,7 +607,9 @@ end
                         fdims = fv isa AbstractArray ? size(fv) : ()
                         fpa = create($FM(), fdims)
                         # mx_set_field! transfers ownership of fpa to the parent. Until
-                        # then fpa is orphaned, so a throw from store! would leak it.
+                        # then fpa is an unattached temporary; free it promptly if store!
+                        # throws (MATLAB would auto-free it at MEX return anyway — this
+                        # is peak-memory hygiene + error robustness, not a leak fix).
                         attached = false
                         try
                             store!($FM(), fpa, fv)
@@ -866,9 +868,10 @@ mx_class_id(::StringVectorMarshaler)::Cint = mxCELL_CLASS
 struct StringArrayMarshaler end
 
 function load(::StringArrayMarshaler, pa::MxArray)::Matrix{String}
-    # `cell` is a mexCallMATLAB *output*: MATLAB hands ownership to the caller, so we
-    # must mxDestroyArray it. try/finally guarantees that on every exit, including a
-    # throw from mx_get_string mid-loop (the Julia analogue of __attribute__((cleanup))).
+    # `cell` is a mexCallMATLAB *output*: ownership comes to the caller. Destroy it on
+    # every exit (incl. a throw from mx_get_string mid-loop) for peak-memory hygiene and
+    # error robustness — MATLAB would auto-free this temporary at MEX return regardless.
+    # try/finally is the Julia analogue of ParselTongue's __attribute__((cleanup)).
     cell = mex_call_matlab_1("cellstr", pa)   # string array → M×N cell of char
     try
         m = Int(mx_get_m(cell))
@@ -971,11 +974,12 @@ function store_result(plhs::Ptr{MxArray}, k::Int, v::T) where {T}
     dims = v isa AbstractArray ? size(v) : ()
     pa = create(m, dims)
     # MATLAB takes ownership of `pa` only once unsafe_store! hands it to plhs[]. If
-    # store! throws midway (a nested marshaler erroring), `pa` is still ours and would
-    # leak — its already-attached children leak with it. Destroy it on the throwing
-    # path, then "disarm" the guard by nulling `ok`'d-out `pa` once ownership transfers
-    # (the Rust "pass it to the owner" move). try/finally is the trim-safe Julia
-    # analogue of ParselTongue's C __attribute__((cleanup)) + ArgPlan.disarm.
+    # store! throws midway (a nested marshaler erroring), `pa` (and its already-attached
+    # children) is an unattached temporary; free it on the throwing path, then "disarm"
+    # by setting owned=false once ownership transfers (the Rust "pass it to the owner"
+    # move). MATLAB would auto-free `pa` at MEX return regardless, so this is peak-memory
+    # hygiene + error robustness — the trim-safe Julia analogue of ParselTongue's
+    # __attribute__((cleanup)) + ArgPlan.disarm, not a fix for a real cross-call leak.
     owned = true
     try
         store!(m, pa, v)
@@ -1000,9 +1004,10 @@ function store_result(plhs::Ptr{MxArray}, k::Int, v::Matrix{String})
     m, n = size(v)
     cell = mx_create_cell_matrix(Csize_t(m), Csize_t(n))
     # `cell` is only ever a mexCallMATLAB *input* (string() consumes a copy, not
-    # ownership) — so we own it on every path and must destroy it. Without the
-    # finally, a throw from mx_create_string mid-loop, or a mexCallMATLAB failure,
-    # leaks `cell` (and even the success path leaked it before this guard).
+    # ownership) — so we own it on every path. Destroy it promptly in `finally`
+    # rather than waiting for MATLAB's return-time auto-free of temporaries: caps
+    # peak memory and is robust if mx_create_string / mexCallMATLAB throws. (MATLAB
+    # would reclaim `cell` at MEX return regardless — this is hygiene, not a leak fix.)
     try
         @inbounds for idx in 1:(m * n)
             mx_set_cell!(cell, Csize_t(idx - 1), mx_create_string(v[idx]))

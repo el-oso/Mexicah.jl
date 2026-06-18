@@ -91,12 +91,16 @@ static size_t element_size(int classid) {
     }
 }
 
-/* ── Leak accounting ─────────────────────────────────────────────────────── */
+/* ── Live-array accounting (temporary-cleanup discipline guard) ───────────── */
 /* Counts live mx_stub_t arrays (every birth via alloc_stub/deep_copy increments;
- * every free in mxDestroyArray decrements). A MATLAB-less leak harness samples
- * mx_stub_live_count() before/after a round trip — including the throwing path —
- * to catch a leak-on-error. Children attached via mxSetField/mxSetCell are counted
- * individually, so a fully-destroyed parent nets back to the baseline. */
+ * every free in mxDestroyArray decrements). NOTE: this stub deliberately does NOT
+ * emulate MATLAB's behaviour of auto-freeing temporary mxArrays when a MEX-function
+ * returns — so it is STRICTER than real MATLAB. The test that samples
+ * mx_stub_live_count() therefore guards the marshalers' explicit-temporary-cleanup
+ * discipline (it flags a marshaler that orphans a temporary without destroying it);
+ * it is NOT a real-MATLAB leak detector — in MATLAB those temporaries are reclaimed
+ * at return. Children attached via mxSetField/mxSetCell are counted individually, so
+ * a fully-destroyed parent nets back to the baseline. */
 static long g_mx_live = 0;
 
 long mx_stub_live_count(void) { return g_mx_live; }
