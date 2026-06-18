@@ -252,3 +252,81 @@ end
         @test got == src
     end
 end
+
+# ── Leak-regression: marshalers must free owned intermediates on EVERY exit ────
+# Mirrors ParselTongue's ASan leak gate, MATLAB-free: the libmx stub counts live
+# mx_stub_t arrays via mx_stub_live_count(). A round trip (incl. the throwing path)
+# must net back to the starting count — no orphaned intermediate mxArray.
+@testitem "leak-regression: store_result frees intermediates on success + error" tags = [:matlab] begin
+    using Mexicah, Test
+
+    # `_LeakS` has a Vector field (so an intermediate child mxArray is created and
+    # attached) followed by a String field carrying an embedded NUL, which makes
+    # mx_create_string's Cstring conversion throw *after* the parent struct + the
+    # vector child are allocated — the canonical leak-on-error shape.
+    struct _LeakS
+        v::Vector{Float64}
+        s::String
+    end
+
+    live() = ccall(:mx_stub_live_count, Clong, ())
+
+    # Sanity: the counter is wired up (a create+destroy nets to baseline).
+    base = live()
+    pa = Mexicah.mx_create_double_matrix(Csize_t(3), Csize_t(1), Mexicah.mxREAL)
+    @test live() == base + 1
+    Mexicah.mx_destroy_array(pa)
+    @test live() == base
+
+    # 1. Clean Matrix{String} round trip nets to baseline (load + store_result both
+    #    own a mexCallMATLAB array that must be destroyed — previously leaked always).
+    base = live()
+    slot = Ref{Mexicah.MxArray}(C_NULL)
+    GC.@preserve slot begin
+        src = ["a" "bb"; "ccc" "d"]
+        Mexicah.store_result(Base.unsafe_convert(Ptr{Mexicah.MxArray}, slot), 1, src)
+        got = Mexicah.load(Mexicah.StringArrayMarshaler(), slot[])
+        @test got == src
+        Mexicah.mx_destroy_array(slot[])   # the plhs output is the caller's to free here
+    end
+    @test live() == base
+
+    # 2. Throwing path: store_result on a struct whose String field has an embedded
+    #    NUL throws inside the nested mx_create_string AFTER the parent struct and the
+    #    Vector child are allocated. The try/finally guard must destroy the parent
+    #    (recursively freeing the attached child) so the count returns to baseline.
+    base = live()
+    slot2 = Ref{Mexicah.MxArray}(C_NULL)
+    GC.@preserve slot2 begin
+        bad = _LeakS([1.0, 2.0, 3.0], "embedded\0nul")
+        @test_throws ArgumentError Mexicah.store_result(
+            Base.unsafe_convert(Ptr{Mexicah.MxArray}, slot2), 1, bad,
+        )
+    end
+    @test live() == base   # no orphaned struct/vector intermediate
+
+    # 3. Clean cell-array (Tuple) round trip nets to baseline — exercises the
+    #    per-element guard's SUCCESS path (the "disarm"/ownership-transfer move):
+    #    each child must be handed to the cell exactly once, no double-free, no leak.
+    base = live()
+    slot3 = Ref{Mexicah.MxArray}(C_NULL)
+    GC.@preserve slot3 begin
+        tup = ([4.0, 5.0], Int32(7))
+        Mexicah.store_result(Base.unsafe_convert(Ptr{Mexicah.MxArray}, slot3), 1, tup)
+        @test slot3[] != C_NULL
+        Mexicah.mx_destroy_array(slot3[])
+    end
+    @test live() == base
+
+    # 4. Throwing path through a struct ARRAY (per-element field guard): the Vector
+    #    field is created + attached, then the String-with-NUL field throws.
+    base = live()
+    slot4 = Ref{Mexicah.MxArray}(C_NULL)
+    GC.@preserve slot4 begin
+        badarr = [_LeakS([1.0], "ok"), _LeakS([2.0, 3.0], "bad\0here")]
+        @test_throws ArgumentError Mexicah.store_result(
+            Base.unsafe_convert(Ptr{Mexicah.MxArray}, slot4), 1, badarr,
+        )
+    end
+    @test live() == base
+end

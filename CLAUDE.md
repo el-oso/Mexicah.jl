@@ -203,7 +203,13 @@ raw `double` reinterpret would corrupt non-double scalar/struct fields.
 (string array → cell); both copy shape and deep-copy elements. `mxDestroyArray`
 recurses into struct fields and cell children. `mxDuplicateArray` performs a deep copy.
 `mexErrMsgIdAndTxt` calls `abort()` — marshaler errors surface as Julia exceptions
-in unit tests, so this path is never reached.
+in unit tests, so this path is never reached. The stub also tracks a live-array count
+(`g_mx_live`, incremented in `alloc_stub`/`deep_copy`, decremented in `mxDestroyArray`)
+exposed via the non-`mx`-prefixed `mx_stub_live_count()` / `mx_stub_reset_count()`;
+the leak-regression test (`test/marshaling_test.jl`) samples it across success and
+throwing paths to catch a leak-on-error (the MATLAB-less analogue of ParselTongue's
+ASan/LSan gate). Each child counted individually, so a fully-destroyed parent nets
+back to baseline.
 
 ## TypeContracts dependency
 
@@ -212,40 +218,53 @@ structural two-arg `check_contract(T, I)` / `@verify ... for_contract=` used to
 verify the marshalers, which don't subtype the contract). Both `Project.toml` and
 `test/Project.toml` resolve it from General — no `[sources]` entries needed.
 
-## Memory-safety: RAII scope-guard cleanup (technique to evaluate)
+## Memory-safety: RAII scope-guard cleanup (audit done — applied)
 
-**Status: not yet applied to Mexicah — recorded here for a follow-up agent to assess.**
+**Status: audited and fixed.** The Julia-side analogue of ParselTongue's
+`__attribute__((cleanup))` is `try/finally` guards in the marshalers; three genuine
+leak-on-error (and two leak-*always*) paths were found and fixed in `src/marshaling.jl`.
 
-The sibling project ParselTongue (`../parseltongue`) adopted the Rust-derived
-scope-guard cleanup technique (the one the Linux kernel borrowed via `cleanup.h`):
-declare a heap resource with the compiler's `__attribute__((cleanup(fn)))` so it is
-freed automatically on *any* scope exit, eliminating hand-written cascading frees on
-each error path (the bug class behind leak-on-error CVEs). ParselTongue's reference
-implementation (commit on `master`): dict-argument marshalling in `src/cshim.jl`
-(`_ap_dict` + `_dict_structs` emit `_pt_dictguard_*`), with a new post-call "disarm"
-step (`ArgPlan.disarm`) for the case where ownership transfers to the callee on
-success (Rust's "borrow checker, pass it to the owner"). Validated under ASan/LSan
-in `test/asan/` (a `take` fixture + driver exercising success + error paths;
-teeth-checked). Compiler support: gcc/clang/MinGW — all of Mexicah's targets too.
+The sibling project ParselTongue (`../parseltongue`) used the C attribute directly
+because it *generates the marshalling C*. Mexicah marshals **in Julia** (`@generated`
+`load`/`store!`/`create` + `ccall` to libmx); its only generated C is the gateway
+(`src/build.jl`, `dlopen` only — nothing to guard). So the C attribute does not apply;
+`try/finally` is the idiomatic, trim-safe equivalent (a `Bool` flag + concrete
+`mx_destroy_array` call — no dynamic dispatch, passes `check_trim_compat`).
 
-**Architectural caveat — applicability differs.** ParselTongue *generates the
-marshalling C*, so the C attribute fits directly. Mexicah instead marshals **in
-Julia** (`src/marshaling.jl` `@generated` `load`/`store!`/`create` + `ccall` to
-libmx); its only generated C is the thin gateway (`src/build.jl`, `dlopen`/
-`LoadLibrary` only — no marshalling allocations). So:
+**Ownership model (confirmed against the libmx stub, matches MATLAB):**
+`mxSetField`/`mxSetCell` *transfer* ownership of the child to the parent (and destroy
+any previous occupant); `mxDestroyArray` recurses into fields/cells; MATLAB owns
+`plhs[i]` only *after* `unsafe_store!` hands it over; `mexCallMATLAB` does **not** take
+ownership of its inputs — the caller must destroy them.
 
-- The C `__attribute__((cleanup))` technique applies to Mexicah **only** if/when it
-  emits marshalling C (e.g. a future zero-copy path); the gateway has nothing to guard.
-- The **Julia-side analogue** is the real opportunity: audit the marshalers and the
-  generated `@ccallable mexFunction_<name>` entry (`src/codegen.jl`, already wraps the
-  body in a `try`) for **leak-on-error paths** — an `mxArray`/`mxCalloc` allocated by
-  `create`/`store!` that is *not* `mxDestroyArray`/`mxFree`d when a later marshaling
-  step throws. The Julia idiom for the same guarantee is `try/finally` (or a small
-  scope-guard helper) ensuring the destroy/free runs on every exit. MATLAB normally
-  owns `plhs[]` outputs, so focus on intermediate/temporary `mxArray`s and any
-  `mxMalloc`/`mxCalloc` buffers the marshalers allocate.
+**Audit results (per allocation in `src/marshaling.jl`):**
+- Scalar/array `create`+`store!` (Float64, Int, Bool, Dense*, Complex*, Sparse*,
+  Char, StringVector): leaf marshalers; their `store!` cannot throw after allocating an
+  owned intermediate, so the generic `store_result` guard (below) covers them. Safe.
+- `store_result` (generic): `pa = create(...)` then `store!(...)`. If `store!` throws,
+  `pa` (and any already-attached children) was orphaned → **leak-on-error**. Fixed with
+  an `owned` flag + `try/finally`; `owned=false` after `unsafe_store!` "disarms" the
+  guard once MATLAB takes ownership (the ParselTongue `ArgPlan.disarm` move).
+- `store_result(::Matrix{String})`: `cell` is only ever a `mexCallMATLAB` input, so it
+  is the caller's to destroy — it leaked on **every** call (and on a mid-loop throw).
+  Fixed with `try/finally` destroying `cell`.
+- `load(::StringArrayMarshaler)`: `cell` from `mexCallMATLAB("cellstr")` is a
+  caller-owned output that was never destroyed → leaked on **every** load. Fixed with
+  `try/finally`.
+- Composite `store!` (`StructMarshaler`, `StructArrayMarshaler`, `CellArrayMarshaler`):
+  per element/field, a child `fpa = create(...)` then `store!(...)` then set. A throw
+  from the nested `store!` orphaned `fpa` *before* the parent owned it →
+  **leak-on-error**. Fixed with an `attached` flag + `try/finally` around each
+  child (the `@generated` bodies emit the guard). The String-field fast paths
+  (`mx_set_field!(pa, …, mx_create_string(…))`) have no intermediate variable — if
+  `mx_create_string` throws nothing was allocated — so they need no guard.
 
-Suggested first step for the follow-up agent: grep `src/marshaling.jl` for
-`mxCreate*`/`mxMalloc`/`mxCalloc` and trace whether each has a guaranteed
-destroy/free on the throwing path; add a MATLAB-less leak check (the `libmx_stub`
-harness can count allocs vs frees) mirroring ParselTongue's ASan gate.
+**Leak regression check:** `test/marshaling_test.jl` testitem
+`"leak-regression: store_result frees intermediates on success + error"` (tagged
+`:matlab`). The libmx stub now exports `mx_stub_live_count()`/`mx_stub_reset_count()`
+(a live-array counter incremented in `alloc_stub`/`deep_copy`, decremented in
+`mxDestroyArray`). The test samples the count across clean round trips and across
+throwing paths (a struct/struct-array with a `String` field carrying an embedded NUL,
+which makes `mxCreateString`'s `Cstring` conversion throw *after* the parent + a vector
+child are allocated) and asserts it nets back to baseline. Teeth-checked: nulling the
+`store_result` guard makes the test fail; restoring it passes.

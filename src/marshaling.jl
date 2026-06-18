@@ -606,8 +606,16 @@ end
                     let fv = getfield(s, $i)
                         fdims = fv isa AbstractArray ? size(fv) : ()
                         fpa = create($FM(), fdims)
-                        store!($FM(), fpa, fv)
-                        mx_set_field!(pa, Csize_t(0), $nm, fpa)
+                        # mx_set_field! transfers ownership of fpa to the parent. Until
+                        # then fpa is orphaned, so a throw from store! would leak it.
+                        attached = false
+                        try
+                            store!($FM(), fpa, fv)
+                            mx_set_field!(pa, Csize_t(0), $nm, fpa)
+                            attached = true
+                        finally
+                            attached || mx_destroy_array(fpa)
+                        end
                     end
                 end,
             )
@@ -679,8 +687,16 @@ end
                     let fv = getfield(el, $k)
                         fdims = fv isa AbstractArray ? size(fv) : ()
                         fpa = create($FM(), fdims)
-                        store!($FM(), fpa, fv)
-                        mx_set_field!(pa, Csize_t(idx - 1), $nm, fpa)
+                        # See StructMarshaler.store!: guard fpa until mx_set_field!
+                        # transfers ownership to the parent struct array.
+                        attached = false
+                        try
+                            store!($FM(), fpa, fv)
+                            mx_set_field!(pa, Csize_t(idx - 1), $nm, fpa)
+                            attached = true
+                        finally
+                            attached || mx_destroy_array(fpa)
+                        end
                     end
                 end,
             )
@@ -741,8 +757,15 @@ end
                 let fv = getfield(tup, $i)
                     fdims = fv isa AbstractArray ? size(fv) : ()
                     fpa = create($FM(), fdims)
-                    store!($FM(), fpa, fv)
-                    mx_set_cell!(pa, Csize_t($(i - 1)), fpa)
+                    # Guard fpa until mx_set_cell! transfers ownership to the cell.
+                    attached = false
+                    try
+                        store!($FM(), fpa, fv)
+                        mx_set_cell!(pa, Csize_t($(i - 1)), fpa)
+                        attached = true
+                    finally
+                        attached || mx_destroy_array(fpa)
+                    end
                 end
             end,
         )
@@ -843,14 +866,21 @@ mx_class_id(::StringVectorMarshaler)::Cint = mxCELL_CLASS
 struct StringArrayMarshaler end
 
 function load(::StringArrayMarshaler, pa::MxArray)::Matrix{String}
+    # `cell` is a mexCallMATLAB *output*: MATLAB hands ownership to the caller, so we
+    # must mxDestroyArray it. try/finally guarantees that on every exit, including a
+    # throw from mx_get_string mid-loop (the Julia analogue of __attribute__((cleanup))).
     cell = mex_call_matlab_1("cellstr", pa)   # string array → M×N cell of char
-    m = Int(mx_get_m(cell))
-    n = Int(mx_get_n(cell))
-    out = Matrix{String}(undef, m, n)
-    @inbounds for idx in 1:(m * n)
-        out[idx] = mx_get_string(mx_get_cell(cell, Csize_t(idx - 1)))
+    try
+        m = Int(mx_get_m(cell))
+        n = Int(mx_get_n(cell))
+        out = Matrix{String}(undef, m, n)
+        @inbounds for idx in 1:(m * n)
+            out[idx] = mx_get_string(mx_get_cell(cell, Csize_t(idx - 1)))
+        end
+        return out
+    finally
+        mx_destroy_array(cell)
     end
-    return out
 end
 
 # No-op: real output is the store_result(::Matrix{String}) override below.
@@ -940,8 +970,20 @@ function store_result(plhs::Ptr{MxArray}, k::Int, v::T) where {T}
     # structs are not arrays and have no ndims method; struct create ignores dims.
     dims = v isa AbstractArray ? size(v) : ()
     pa = create(m, dims)
-    store!(m, pa, v)
-    unsafe_store!(plhs, pa, k)
+    # MATLAB takes ownership of `pa` only once unsafe_store! hands it to plhs[]. If
+    # store! throws midway (a nested marshaler erroring), `pa` is still ours and would
+    # leak — its already-attached children leak with it. Destroy it on the throwing
+    # path, then "disarm" the guard by nulling `ok`'d-out `pa` once ownership transfers
+    # (the Rust "pass it to the owner" move). try/finally is the trim-safe Julia
+    # analogue of ParselTongue's C __attribute__((cleanup)) + ArgPlan.disarm.
+    owned = true
+    try
+        store!(m, pa, v)
+        unsafe_store!(plhs, pa, k)
+        owned = false
+    finally
+        owned && mx_destroy_array(pa)
+    end
     return
 end
 
@@ -957,9 +999,17 @@ end
 function store_result(plhs::Ptr{MxArray}, k::Int, v::Matrix{String})
     m, n = size(v)
     cell = mx_create_cell_matrix(Csize_t(m), Csize_t(n))
-    @inbounds for idx in 1:(m * n)
-        mx_set_cell!(cell, Csize_t(idx - 1), mx_create_string(v[idx]))
+    # `cell` is only ever a mexCallMATLAB *input* (string() consumes a copy, not
+    # ownership) — so we own it on every path and must destroy it. Without the
+    # finally, a throw from mx_create_string mid-loop, or a mexCallMATLAB failure,
+    # leaks `cell` (and even the success path leaked it before this guard).
+    try
+        @inbounds for idx in 1:(m * n)
+            mx_set_cell!(cell, Csize_t(idx - 1), mx_create_string(v[idx]))
+        end
+        unsafe_store!(plhs, mex_call_matlab_1("string", cell), k)
+    finally
+        mx_destroy_array(cell)
     end
-    unsafe_store!(plhs, mex_call_matlab_1("string", cell), k)
     return
 end

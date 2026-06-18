@@ -91,9 +91,21 @@ static size_t element_size(int classid) {
     }
 }
 
+/* ── Leak accounting ─────────────────────────────────────────────────────── */
+/* Counts live mx_stub_t arrays (every birth via alloc_stub/deep_copy increments;
+ * every free in mxDestroyArray decrements). A MATLAB-less leak harness samples
+ * mx_stub_live_count() before/after a round trip — including the throwing path —
+ * to catch a leak-on-error. Children attached via mxSetField/mxSetCell are counted
+ * individually, so a fully-destroyed parent nets back to the baseline. */
+static long g_mx_live = 0;
+
+long mx_stub_live_count(void) { return g_mx_live; }
+void mx_stub_reset_count(void) { g_mx_live = 0; }
+
 static mx_stub_t *alloc_stub(void) {
     mx_stub_t *p = (mx_stub_t *)calloc(1, sizeof(mx_stub_t));
     if (!p) { perror("libmx_stub: calloc"); abort(); }
+    g_mx_live++;
     return p;
 }
 
@@ -305,6 +317,7 @@ void mxDestroyArray(mxArray pa) {
         free(pa->cells);
     }
     free(pa);
+    g_mx_live--;
 }
 
 static mx_stub_t *deep_copy(const mx_stub_t *src);
@@ -315,6 +328,7 @@ mxArray mxDuplicateArray(mxArray pa) {
 
 static mx_stub_t *deep_copy(const mx_stub_t *src) {
     mx_stub_t *dst = (mx_stub_t *)malloc(sizeof(mx_stub_t));
+    g_mx_live++;   /* a fresh live array, balanced by its own mxDestroyArray */
     *dst = *src;
     if (src->dims) {
         dst->dims = (size_t *)malloc(src->ndim * sizeof(size_t));
