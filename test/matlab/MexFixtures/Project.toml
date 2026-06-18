@@ -10,10 +10,6 @@ version = "0.1.0"
 [deps]
 Mexicah       = "28b42ba6-5630-446f-bcf8-82236b20fd10"
 SparseArrays  = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
-# TypeContracts is a transitive dep (via Mexicah); listed here only so its
-# [sources] entry is permitted (sources must reference a dep/extra).
-TypeContracts = "c7a3f1e2-84b5-4d69-9e0a-1f2b3c4d5e6f"
 
 [sources]
-Mexicah       = {path = "../../.."}
-TypeContracts = {url = "https://github.com/el-oso/TypeContracts.jl", rev = "master"}
+Mexicah = {path = "../../.."}
