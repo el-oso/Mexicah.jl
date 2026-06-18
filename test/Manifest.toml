@@ -46,6 +46,11 @@ deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 version = "1.7.0"
 
+[[deps.ErrorTypes]]
+git-tree-sha1 = "4830deb2b4de0716e51ea8ecf571af9c207d2b1d"
+uuid = "7f495686-c6d2-4c77-9e8e-e4c865675f9d"
+version = "0.5.2"
+
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 version = "1.11.0"
@@ -132,7 +137,7 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 version = "1.11.0"
 
 [[deps.Mexicah]]
-deps = ["LinearAlgebra", "SparseArrays", "TypeContracts"]
+deps = ["ErrorTypes", "LinearAlgebra", "SparseArrays", "TypeContracts"]
 path = ".."
 uuid = "28b42ba6-5630-446f-bcf8-82236b20fd10"
 version = "0.24.3"

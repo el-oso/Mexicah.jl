@@ -2,6 +2,7 @@ module Mexicah
 
 using SparseArrays: SparseMatrixCSC, nnz
 using TypeContracts: explain_trim_failure, TrimFailure
+using ErrorTypes: Result, Ok, Err, is_error, unwrap, unwrap_error  # SPIKE: composite store! child-marshaling Result core
 
 include("types.jl")
 include("api.jl")

@@ -579,6 +579,33 @@ mx_class_id(::LogicalArrayMarshaler)::Cint = mxLOGICAL_CLASS
 # nested structs. String fields go through mx_create_string directly (the String
 # marshaler has no create+store! form).
 
+# ── SPIKE (ErrorTypes): Result-returning child-marshaling step ────────────────
+# Shared by the three composite store! methods (StructMarshaler, StructArrayMarshaler,
+# CellArrayMarshaler), each of which formerly inlined an identical `attached`-flag
+# try/finally per child. This is the Mexicah analogue of ParselTongue's `_pycall`:
+# one fallible unit, cleanup co-located.
+#
+# Returns Ok(fpa) — a fresh, un-attached child mxArray ready for the caller to
+# transfer (mx_set_field!/mx_set_cell!) — or Err(:child_store) with fpa already
+# freed on the failure path.
+#
+# KEY FINDING (vs ParselTongue): the fallible primitive here (`store!`) signals
+# failure by THROWING (Julia error()), not by returning a NULL/sentinel like the
+# CPython C-API calls in ParselTongue's `_pycall`. To produce an `Err` we must
+# `try/catch` the throw — Result therefore *adds* the very guard we hoped to drop,
+# and the `catch` discards the original exception's message. See spike/SPIKE.md.
+function _marshal_child(m::M, fv)::Result{MxArray, Symbol} where {M}
+    fdims = fv isa AbstractArray ? size(fv) : ()
+    fpa = create(m, fdims)
+    try
+        store!(m, fpa, fv)
+        return Result{MxArray, Symbol}(Ok{MxArray}(fpa))
+    catch
+        mx_destroy_array(fpa)
+        return Result{MxArray, Symbol}(Err(:child_store))
+    end
+end
+
 struct StructMarshaler{T} end
 
 @generated function load(::StructMarshaler{T}, pa::MxArray)::T where {T}
@@ -603,21 +630,11 @@ end
             push!(
                 stmts,
                 quote
-                    let fv = getfield(s, $i)
-                        fdims = fv isa AbstractArray ? size(fv) : ()
-                        fpa = create($FM(), fdims)
-                        # mx_set_field! transfers ownership of fpa to the parent. Until
-                        # then fpa is an unattached temporary; free it promptly if store!
-                        # throws (MATLAB would auto-free it at MEX return anyway — this
-                        # is peak-memory hygiene + error robustness, not a leak fix).
-                        attached = false
-                        try
-                            store!($FM(), fpa, fv)
-                            mx_set_field!(pa, Csize_t(0), $nm, fpa)
-                            attached = true
-                        finally
-                            attached || mx_destroy_array(fpa)
-                        end
+                    let r = _marshal_child($FM(), getfield(s, $i))
+                        is_error(r) && error("Mexicah: failed to marshal struct field $($nm)")
+                        # mx_set_field! transfers ownership of the child to the parent
+                        # (MATLAB auto-frees any un-attached temporary at MEX return).
+                        mx_set_field!(pa, Csize_t(0), $nm, unwrap(r))
                     end
                 end,
             )
@@ -686,19 +703,9 @@ end
             push!(
                 setters,
                 quote
-                    let fv = getfield(el, $k)
-                        fdims = fv isa AbstractArray ? size(fv) : ()
-                        fpa = create($FM(), fdims)
-                        # See StructMarshaler.store!: guard fpa until mx_set_field!
-                        # transfers ownership to the parent struct array.
-                        attached = false
-                        try
-                            store!($FM(), fpa, fv)
-                            mx_set_field!(pa, Csize_t(idx - 1), $nm, fpa)
-                            attached = true
-                        finally
-                            attached || mx_destroy_array(fpa)
-                        end
+                    let r = _marshal_child($FM(), getfield(el, $k))
+                        is_error(r) && error("Mexicah: failed to marshal struct-array field $($nm)")
+                        mx_set_field!(pa, Csize_t(idx - 1), $nm, unwrap(r))
                     end
                 end,
             )
@@ -756,18 +763,10 @@ end
         push!(
             stmts,
             quote
-                let fv = getfield(tup, $i)
-                    fdims = fv isa AbstractArray ? size(fv) : ()
-                    fpa = create($FM(), fdims)
-                    # Guard fpa until mx_set_cell! transfers ownership to the cell.
-                    attached = false
-                    try
-                        store!($FM(), fpa, fv)
-                        mx_set_cell!(pa, Csize_t($(i - 1)), fpa)
-                        attached = true
-                    finally
-                        attached || mx_destroy_array(fpa)
-                    end
+                let r = _marshal_child($FM(), getfield(tup, $i))
+                    is_error(r) && error("Mexicah: failed to marshal cell element $($i)")
+                    # mx_set_cell! transfers ownership of the child to the cell.
+                    mx_set_cell!(pa, Csize_t($(i - 1)), unwrap(r))
                 end
             end,
         )
