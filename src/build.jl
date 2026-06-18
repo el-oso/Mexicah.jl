@@ -245,17 +245,30 @@ and stamps the lib with rpaths relative to `<bundle>/lib`. We relocate the impl 
 """
 function _fix_impl_rpath(impl_path::String)::Nothing
     if Sys.isapple()
-        # Strip juliac's ad-hoc signature first: arm64 `install_name_tool` refuses
-        # to edit a signed binary. Rewrite (not add) the existing rpaths in place:
-        # the dylib has no header padding so adding load commands fails, but the
-        # corrected paths are *shorter* than the originals and fit. Then re-sign.
-        run(ignorestatus(`codesign --remove-signature $impl_path`))
-        for (old, new) in (
+        # Rewrite (not add) the existing rpaths in place: the dylib has no header
+        # padding so adding load commands fails, but the corrected paths are
+        # *shorter* than the originals and fit.
+        edit() = for (old, new) in (
                 "@loader_path/../lib" => "@loader_path/lib",
                 "@loader_path/../lib/julia" => "@loader_path/lib/julia",
             )
             run(`install_name_tool -rpath $old $new $impl_path`)
         end
+        try
+            # Modern `install_name_tool` (Xcode 16 / macOS-15 runners) edits the
+            # ad-hoc-signed binary in place, invalidating the signature — and avoids
+            # the `__LINKEDIT` gap that `codesign --remove-signature` leaves behind,
+            # which newer install_name_tool rejects ("link edit information does not
+            # fill the __LINKEDIT segment").
+            edit()
+        catch
+            # Older toolchains (Xcode ≤ 15) refuse to edit a *signed* binary — strip
+            # the ad-hoc signature first, then rewrite the rpaths.
+            run(ignorestatus(`codesign --remove-signature $impl_path`))
+            edit()
+        end
+        # (Re-)apply an ad-hoc signature: editing invalidated juliac's, and arm64
+        # refuses to load an unsigned/badly-signed dylib.
         run(`codesign -s - -f $impl_path`)
     elseif Sys.islinux()
         patchelf = Sys.which("patchelf")
