@@ -307,6 +307,14 @@ end
 
 # ── MEX error / output ────────────────────────────────────────────────────────
 
+# mexPrintf writes to the MATLAB command window. It is declared varargs in C
+# (`int mexPrintf(const char *fmt, ...)`); we always route the text through a
+# literal "%s" so a stray '%' in a user-supplied banner message can never be
+# interpreted as a conversion specifier (format-string safety). Trim-safe: a
+# single static ccall with constant types.
+mex_printf(s::AbstractString)::Cint =
+    @mexccall ccall(:mexPrintf, Cint, (Cstring, Cstring...), "%s", s)
+
 mex_errorf(id::AbstractString, msg::AbstractString)::Cvoid =
     @mexccall ccall(:mexErrMsgIdAndTxt, Cvoid, (Cstring, Cstring), id, msg)
 

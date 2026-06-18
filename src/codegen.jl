@@ -3,18 +3,20 @@
 # produces a MEX-loadable shared library exporting the symbol `mexFunction`.
 
 """
-    generate_mex_source(func_module, func_name, argtypes, rettypes, mex_name) -> String
+    generate_mex_source(func_module, func_name, argtypes, rettypes, mex_name; message="") -> String
 
 Return the source text of a complete Julia file that wraps `func_module.func_name`
 with a `@ccallable mexFunction` entry point. The caller writes this to a `.jl` file
-and passes it to `juliac`.
+and passes it to `juliac`. `message` is an optional banner printed (after the Julia
+logo) the first time the MEX runs in a MATLAB session.
 """
 function generate_mex_source(
         func_module::Module,
         func_name::Symbol,
         argtypes::Vector{Type},
         rettypes::Vector{Type},
-        mex_name::Symbol,
+        mex_name::Symbol;
+        message::AbstractString = "",
     )::String
     mod_name = nameof(func_module)
     return """
@@ -22,7 +24,7 @@ function generate_mex_source(
     using Mexicah
     import $mod_name
 
-    $(_gen_ccallable(:mexFunction, mod_name, func_name, argtypes, rettypes))
+    $(_gen_ccallable(:mexFunction, mod_name, func_name, argtypes, rettypes; message = message))
     """
 end
 
@@ -36,16 +38,18 @@ once) and calls its own entry. This is what lets several Mexicah MEX coexist in
 one MATLAB session.
 
 `entries` is a vector of `(func_module::Module, func_name::Symbol,
-argtypes::Vector{Type}, rettypes::Vector{Type})`.
+argtypes::Vector{Type}, rettypes::Vector{Type})`. `message` is an optional banner
+printed (after the Julia logo) once per MATLAB session, by whichever entry runs first.
 """
 function generate_shared_mex_source(
-        entries::Vector{<:Tuple{Module, Symbol, Vector{Type}, Vector{Type}}},
+        entries::Vector{<:Tuple{Module, Symbol, Vector{Type}, Vector{Type}}};
+        message::AbstractString = "",
     )::String
     mods = unique(nameof(e[1]) for e in entries)
     imports = join(("import $m" for m in mods), "\n")
     bodies = join(
         (
-            _gen_ccallable(_entry_symbol(e[2]), nameof(e[1]), e[2], e[3], e[4])
+            _gen_ccallable(_entry_symbol(e[2]), nameof(e[1]), e[2], e[3], e[4]; message = message)
                 for e in entries
         ),
         "\n\n",
@@ -68,7 +72,8 @@ function _gen_ccallable(
         mod_name::Symbol,
         func_name::Symbol,
         argtypes::Vector{Type},
-        rettypes::Vector{Type},
+        rettypes::Vector{Type};
+        message::AbstractString = "",
     )::String
     nargs = length(argtypes)
     nret = length(rettypes)
@@ -76,6 +81,7 @@ function _gen_ccallable(
     call_stmt = _gen_call_stmt(mod_name, func_name, nargs, rettypes)
     store_stmts = _gen_store_stmts(rettypes)
     check_stmt = _gen_arg_check(nargs, nret)
+    # `repr` emits a properly escaped Julia string literal for the build-time banner.
     return """
     Base.@ccallable function $entry(
             nlhs::Cint,
@@ -83,7 +89,7 @@ function _gen_ccallable(
             nrhs::Cint,
             prhs::Ptr{Mexicah.MxArray},
         )::Cvoid
-        Mexicah._mexicah_init_once()
+        Mexicah._mexicah_init_once($(repr(String(message))))
         # Convert any Julia exception into a MATLAB error rather than aborting the
         # whole MATLAB process. (mex_errorf longjmps in C, so the arg-count checks
         # below are not Julia exceptions and pass straight through this try.)

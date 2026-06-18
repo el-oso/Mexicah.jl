@@ -20,6 +20,8 @@ Compile Julia function `f` into a MATLAB MEX extension in `output/`.
 - `trim` — pass `--trim=safe` to juliac (recommended; much smaller binaries).
 - `bundle` — pass `--bundle output` to juliac so `libjulia.so` is co-located.
 - `juliac_bin` — path or name of the juliac executable.
+- `message` — optional banner printed (after the Julia logo, which always prints)
+  the first time the MEX runs in a MATLAB session.
 
 # Output
 Writes `output/<name>.<mex_ext>` and, when `bundle=true`, `libjulia.so` and
@@ -37,6 +39,7 @@ function build_mex(
         juliac_bin::String = "juliac",
         project::String = _active_project_dir(),
         verbose::Bool = false,
+        message::AbstractString = "",
     )::String
     func_name = name === nothing ? nameof(f) : name
     func_module = parentmodule(f)
@@ -50,7 +53,8 @@ function build_mex(
         func_name,
         Vector{Type}(input_types),
         Vector{Type}(output_types),
-        func_name,
+        func_name;
+        message = message,
     )
 
     return _compile_generated_source(
@@ -195,6 +199,7 @@ function build_shared_mex(
         juliac_bin::String = "juliac",
         project::String = _active_project_dir(),
         verbose::Bool = false,
+        message::AbstractString = "",
     )::String
     entries = Tuple{Module, Symbol, Vector{Type}, Vector{Type}}[]
     for (f, intypes, outtypes) in funcs
@@ -203,7 +208,7 @@ function build_shared_mex(
         push!(entries, (parentmodule(f), nameof(f), it, Vector{Type}(outtypes)))
     end
 
-    src = generate_shared_mex_source(entries)
+    src = generate_shared_mex_source(entries; message = message)
     produced_lib = _run_juliac(
         src, string(name), output;
         trim = trim, bundle = true, juliac_bin = juliac_bin, project = project,

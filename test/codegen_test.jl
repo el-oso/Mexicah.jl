@@ -18,6 +18,31 @@
     @test occursin("_mex_report_error", src)
 end
 
+@testitem "generate_mex_source bakes the optional banner message into init_once" begin
+    using Mexicah, Test
+
+    module TestFuncsBanner
+    f(x::Float64)::Float64 = x
+    end
+
+    # Default: init_once is called with an empty banner (logo only).
+    plain = Mexicah.generate_mex_source(TestFuncsBanner, :f, Type[Float64], Type[Float64], :f)
+    @test occursin("_mexicah_init_once(\"\")", plain)
+
+    # A user message is embedded as a properly escaped Julia string literal, so a
+    # quote or percent sign in the message can't break the generated source.
+    msg = "Hello \"world\" 100% ok"
+    src = Mexicah.generate_mex_source(
+        TestFuncsBanner, :f, Type[Float64], Type[Float64], :f; message = msg,
+    )
+    @test occursin(repr(msg), src)
+    # The whole generated file must parse (proves the escaping is valid). parseall
+    # handles the multiple top-level statements (using / import / @ccallable).
+    parsed = Meta.parseall(src)
+    @test parsed isa Expr
+    @test parsed.head === :toplevel
+end
+
 @testitem "generate_mex_source guards multi-output stores by nlhs" begin
     using Mexicah, Test
 

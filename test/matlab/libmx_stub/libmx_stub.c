@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdarg.h>
 
 /* ── mxClassID constants (match MATLAB's enum) ──────────────────────────── */
 #define MX_UNKNOWN_CLASS   0
@@ -540,4 +541,14 @@ int mexCallMATLAB(int nlhs, mxArray plhs[], int nrhs, mxArray prhs[], const char
 void mexErrMsgIdAndTxt(const char *id, const char *msg, ...) {
     fprintf(stderr, "libmx_stub mexErrMsgIdAndTxt: [%s] %s\n", id ? id : "", msg ? msg : "");
     abort();
+}
+
+/* mexPrintf — writes to stdout in the stub (the banner/logo path). Varargs like
+ * the real MATLAB symbol; the marshaler always passes a "%s" format. */
+int mexPrintf(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int r = vprintf(fmt, ap);
+    va_end(ap);
+    return r;
 }
