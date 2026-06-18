@@ -211,3 +211,41 @@ Registered in the Julia General registry; Mexicah requires `0.13.1` (for the
 structural two-arg `check_contract(T, I)` / `@verify ... for_contract=` used to
 verify the marshalers, which don't subtype the contract). Both `Project.toml` and
 `test/Project.toml` resolve it from General — no `[sources]` entries needed.
+
+## Memory-safety: RAII scope-guard cleanup (technique to evaluate)
+
+**Status: not yet applied to Mexicah — recorded here for a follow-up agent to assess.**
+
+The sibling project ParselTongue (`../parseltongue`) adopted the Rust-derived
+scope-guard cleanup technique (the one the Linux kernel borrowed via `cleanup.h`):
+declare a heap resource with the compiler's `__attribute__((cleanup(fn)))` so it is
+freed automatically on *any* scope exit, eliminating hand-written cascading frees on
+each error path (the bug class behind leak-on-error CVEs). ParselTongue's reference
+implementation (commit on `master`): dict-argument marshalling in `src/cshim.jl`
+(`_ap_dict` + `_dict_structs` emit `_pt_dictguard_*`), with a new post-call "disarm"
+step (`ArgPlan.disarm`) for the case where ownership transfers to the callee on
+success (Rust's "borrow checker, pass it to the owner"). Validated under ASan/LSan
+in `test/asan/` (a `take` fixture + driver exercising success + error paths;
+teeth-checked). Compiler support: gcc/clang/MinGW — all of Mexicah's targets too.
+
+**Architectural caveat — applicability differs.** ParselTongue *generates the
+marshalling C*, so the C attribute fits directly. Mexicah instead marshals **in
+Julia** (`src/marshaling.jl` `@generated` `load`/`store!`/`create` + `ccall` to
+libmx); its only generated C is the thin gateway (`src/build.jl`, `dlopen`/
+`LoadLibrary` only — no marshalling allocations). So:
+
+- The C `__attribute__((cleanup))` technique applies to Mexicah **only** if/when it
+  emits marshalling C (e.g. a future zero-copy path); the gateway has nothing to guard.
+- The **Julia-side analogue** is the real opportunity: audit the marshalers and the
+  generated `@ccallable mexFunction_<name>` entry (`src/codegen.jl`, already wraps the
+  body in a `try`) for **leak-on-error paths** — an `mxArray`/`mxCalloc` allocated by
+  `create`/`store!` that is *not* `mxDestroyArray`/`mxFree`d when a later marshaling
+  step throws. The Julia idiom for the same guarantee is `try/finally` (or a small
+  scope-guard helper) ensuring the destroy/free runs on every exit. MATLAB normally
+  owns `plhs[]` outputs, so focus on intermediate/temporary `mxArray`s and any
+  `mxMalloc`/`mxCalloc` buffers the marshalers allocate.
+
+Suggested first step for the follow-up agent: grep `src/marshaling.jl` for
+`mxCreate*`/`mxMalloc`/`mxCalloc` and trace whether each has a guaranteed
+destroy/free on the throwing path; add a MATLAB-less leak check (the `libmx_stub`
+harness can count allocs vs frees) mirroring ParselTongue's ASan gate.
