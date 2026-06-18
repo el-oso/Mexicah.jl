@@ -205,7 +205,10 @@ Solve `A * x = b` using the LU factorization stored at `id`.
 function la_lu_solve(id::UInt64, b::Vector{Float64})::Vector{Float64}
     obj = _handle_get(id)
     obj === nothing && error("Mexicah/LinearAlgebra: no LU factorization at handle $id")
-    return obj \ b
+    # Narrow the Any from the handle registry to the concrete factorization so the
+    # `\` solve dispatches statically — required for juliac --trim=safe.
+    F = obj::LinearAlgebra.LU{Float64, Matrix{Float64}, Vector{Int64}}
+    return F \ b
 end
 
 """
@@ -217,7 +220,8 @@ Cheaper than `la_det` for an already-factored matrix.
 function la_lu_det(id::UInt64)::Float64
     obj = _handle_get(id)
     obj === nothing && error("Mexicah/LinearAlgebra: no LU factorization at handle $id")
-    return det(obj)
+    F = obj::LinearAlgebra.LU{Float64, Matrix{Float64}, Vector{Int64}}
+    return det(F)
 end
 
 """
@@ -248,7 +252,9 @@ Solve `A * x = b` using the Cholesky factorization stored at `id`.
 function la_chol_solve(id::UInt64, b::Vector{Float64})::Vector{Float64}
     obj = _handle_get(id)
     obj === nothing && error("Mexicah/LinearAlgebra: no Cholesky factorization at handle $id")
-    return obj \ b
+    # Narrow to the concrete factorization so `\` is statically dispatched (trim-safe).
+    F = obj::LinearAlgebra.Cholesky{Float64, Matrix{Float64}}
+    return F \ b
 end
 
 """
