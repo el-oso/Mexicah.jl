@@ -16,25 +16,22 @@ linker resolves them at MEX load time.
 
 ## Build pipeline
 
-```
-@mexfunction f(x::T)::R   →   type signature stored in _MEX_EXPORTS
+![Mexicah build pipeline: an @mexfunction signature is recorded, then build_mex validates, generates a self-contained Julia source, formats it, compiles it with juliac --trim=safe --bundle, renames the library to a .mexa64, and writes a setup.m — producing a mex/ directory MATLAB loads with no Julia present.](../assets/build-pipeline.svg)
 
-build_mex(f; ...)
-  │
-  ├─ 1. Validate: hasmethod(f, Tuple{T})
-  │                Base.return_types warns if result is Any
-  │
-  ├─ 2. Codegen: generate_mex_source(...)
-  │               → f_mexgen.jl  (complete, self-contained Julia file)
-  │
-  ├─ 3. Format:  runic -i f_mexgen.jl
-  │
-  ├─ 4. Compile: juliac --output-lib f_tmp.so --trim=safe --bundle ./mex/ f_mexgen.jl
-  │
-  ├─ 5. Rename:  mv f_tmp.so → ./mex/f.mexa64
-  │
-  └─ 6. Setup:   write ./mex/mexicah_setup.m
-```
+In detail:
+
+1. **Validate** — `hasmethod(f, Tuple{T})`; `Base.return_types` warns if the result
+   is inferred as `Any`.
+2. **Codegen** — `generate_mex_source(...)` emits `f_mexgen.jl`, a complete,
+   self-contained Julia file (the `@ccallable mexFunction` plus the marshalers).
+3. **Format** — `runic -i f_mexgen.jl`.
+4. **Compile** — `juliac --output-lib f_tmp.so --trim=safe --bundle ./mex/ f_mexgen.jl`.
+5. **Rename** — `mv f_tmp.so → ./mex/f.mexa64`.
+6. **Setup** — write `./mex/mexicah_setup.m`.
+
+The diagram source lives in
+[`docs/src/assets/build-pipeline.mmd`](https://github.com/el-oso/Mexicah.jl/blob/master/docs/src/assets/build-pipeline.mmd);
+regenerate with `mmdc -i build-pipeline.mmd -o build-pipeline.svg -b transparent`.
 
 ## Generated source structure
 

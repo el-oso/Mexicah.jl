@@ -60,8 +60,8 @@ end
 ```
 
 The driver `examples/linalg.jl` builds them together (the
-`MexicahExamples.LINALG` list also includes `la_inv` and the handle-based LU
-functions below):
+`MexicahExamples.LINALG` list also includes `la_inv` and the handle-based LU and
+Cholesky functions below):
 
 ```bash
 julia --project=examples examples/linalg.jl
@@ -86,29 +86,29 @@ When solving `A * x = b` for many different right-hand sides, factorize once and
 reuse:
 
 ```julia
-@mexfunction function factorize(A::Matrix{Float64})::UInt64
+@mexfunction function la_lu_factorize(A::Matrix{Float64})::UInt64
     return Mexicah.la_lu_factorize(A)
 end
 
-@mexfunction function backsolve(id::UInt64, b::Vector{Float64})::Vector{Float64}
+@mexfunction function la_lu_solve(id::UInt64, b::Vector{Float64})::Vector{Float64}
     return Mexicah.la_lu_solve(id, b)
 end
 
-@mexfunction function release_lu(id::UInt64)::Bool
+@mexfunction function la_lu_destroy(id::UInt64)::Bool
     return Mexicah.la_lu_destroy(id)
 end
 ```
 
 ```matlab
 A  = rand(500, 500);
-id = factorize(A);            % one LU factorization
+id = la_lu_factorize(A);          % one LU factorization
 
 for k = 1:100
     b  = rand(500, 1);
-    x  = backsolve(id, b);   % O(n^2) solve, not O(n^3)
+    x  = la_lu_solve(id, b);     % O(n^2) solve, not O(n^3)
 end
 
-release_lu(id);               % free memory
+la_lu_destroy(id);                % free memory
 ```
 
 ## Example: handle-based Cholesky (SPD systems)
@@ -116,29 +116,29 @@ release_lu(id);               % free memory
 For symmetric positive-definite matrices, Cholesky is twice as fast as LU:
 
 ```julia
-@mexfunction function chol_factorize(A::Matrix{Float64})::UInt64
+@mexfunction function la_chol_factorize(A::Matrix{Float64})::UInt64
     return Mexicah.la_chol_factorize(A)
 end
 
-@mexfunction function chol_solve(id::UInt64, b::Vector{Float64})::Vector{Float64}
+@mexfunction function la_chol_solve(id::UInt64, b::Vector{Float64})::Vector{Float64}
     return Mexicah.la_chol_solve(id, b)
 end
 
-@mexfunction function chol_destroy(id::UInt64)::Bool
+@mexfunction function la_chol_destroy(id::UInt64)::Bool
     return Mexicah.la_chol_destroy(id)
 end
 ```
 
 ```matlab
 K  = K_stiffness_matrix();    % assumed SPD
-id = chol_factorize(K);
+id = la_chol_factorize(K);
 
 for t = 1:n_timesteps
     f  = load_vector(t);
-    u  = chol_solve(id, f);
+    u  = la_chol_solve(id, f);
 end
 
-chol_destroy(id);
+la_chol_destroy(id);
 ```
 
 ## Why use Julia's LinearAlgebra from MATLAB?

@@ -1,0 +1,15 @@
+flowchart LR
+    A["<b>@mexfunction</b><br/>f(x::T)::R &rarr; _MEX_EXPORTS"]
+    A --> B(["build_mex"])
+    B --> V["<b>validate</b><br/>hasmethod; return type"]
+    V --> C["<b>codegen</b><br/>f_mexgen.jl"]
+    C --> F["<b>format</b><br/>runic"]
+    F --> J["<b>juliac --trim=safe</b><br/>--bundle ./mex/"]
+    J --> R["<b>rename</b><br/>&rarr; f.mexa64"]
+    R --> S["<b>setup.m</b>"]
+    S --> O(["<b>./mex/</b><br/>load in MATLAB, no Julia"])
+
+    style A fill:#e3f2fd,stroke:#1565c0,color:#0d2440
+    style O fill:#e8f5e9,stroke:#2e7d32,color:#0d2440
+    style J fill:#fff3e0,stroke:#e65100,color:#0d2440
+    style C fill:#fff3e0,stroke:#e65100,color:#0d2440

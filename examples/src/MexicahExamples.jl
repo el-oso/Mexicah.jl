@@ -72,6 +72,19 @@ end
     return Mexicah.la_lu_destroy(id)
 end
 
+# Handle-based Cholesky: factorize an SPD matrix once, solve many times.
+@mexfunction function la_chol_factorize(A::Matrix{Float64})::UInt64
+    return Mexicah.la_chol_factorize(A)
+end
+
+@mexfunction function la_chol_solve(id::UInt64, b::Vector{Float64})::Vector{Float64}
+    return Mexicah.la_chol_solve(id, b)
+end
+
+@mexfunction function la_chol_destroy(id::UInt64)::Bool
+    return Mexicah.la_chol_destroy(id)
+end
+
 const LINALG = [
     (la_svd, Type[Matrix{Float64}], Type[Matrix{Float64}, Vector{Float64}, Matrix{Float64}]),
     (la_solve, Type[Matrix{Float64}, Vector{Float64}], Type[Vector{Float64}]),
@@ -80,6 +93,9 @@ const LINALG = [
     (la_lu_factorize, Type[Matrix{Float64}], Type[UInt64]),
     (la_lu_solve, Type[UInt64, Vector{Float64}], Type[Vector{Float64}]),
     (la_lu_destroy, Type[UInt64], Type[Bool]),
+    (la_chol_factorize, Type[Matrix{Float64}], Type[UInt64]),
+    (la_chol_solve, Type[UInt64, Vector{Float64}], Type[Vector{Float64}]),
+    (la_chol_destroy, Type[UInt64], Type[Bool]),
 ]
 
 # ── Opaque-handle pattern: persist a Julia struct across MEX calls ────────────
@@ -109,10 +125,16 @@ end
     return Mexicah._handle_delete!(id)
 end
 
+# Leak check: how many handles are currently live (0 when nothing is open).
+@mexfunction function live_handle_count()::Int64
+    return Int64(Mexicah._handle_count())
+end
+
 const HANDLES = [
     (factorize_system, Type[Matrix{Float64}], Type[UInt64]),
     (solve_system, Type[UInt64, Vector{Float64}], Type[Vector{Float64}]),
     (destroy_system, Type[UInt64], Type[Bool]),
+    (live_handle_count, Type[], Type[Int64]),
 ]
 
 end # module
