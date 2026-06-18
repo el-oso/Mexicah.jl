@@ -1,5 +1,6 @@
 # Test environment — run with: julia --project=test test/runtests.jl
 [deps]
+JET           = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 Libdl         = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Mexicah       = "28b42ba6-5630-446f-bcf8-82236b20fd10"
@@ -12,5 +13,6 @@ TypeContracts = "c7a3f1e2-84b5-4d69-9e0a-1f2b3c4d5e6f"
 Mexicah = {path = ".."}
 
 [compat]
+JET         = "0.9, 0.10, 0.11"
 julia       = "1.12"
 ReTestItems = "1"
