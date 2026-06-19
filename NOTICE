@@ -1,0 +1,26 @@
+NOTICE
+======
+
+Provenance
+----------
+This project interoperates with MATLAB(R) by compiling Julia functions into
+MEX files, by way of an independent, clean-room implementation of the publicly
+documented MATLAB C Matrix API (the `mx*` and `mex*` functions and the
+`mxArray` type), derived solely from MathWorks' public API documentation. It
+contains:
+
+  * NO MathWorks header files (e.g. mex.h, matrix.h),
+  * NO MathWorks source code, and
+  * NO MathWorks binaries or libraries.
+
+Mexicah.jl declares the MATLAB C API via `ccall` (without headers) and, through
+LibMx.jl, generates and compiles MEX files. The shared mxArray FFI and
+marshaling core lives in LibMx.jl. The purpose is interoperability, not the
+reproduction of MATLAB or any of its components.
+
+Trademarks
+----------
+MATLAB and MEX are trademarks of The MathWorks, Inc. This project is not
+affiliated with, sponsored by, or endorsed by The MathWorks, Inc. The
+trademarks are used here only descriptively, to identify the interface with
+which this software interoperates.

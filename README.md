@@ -86,3 +86,11 @@ MIT — see [LICENSE](LICENSE).
 ## Acknowledgements
 
 This package was developed with assistance from [Claude](https://claude.ai) (Anthropic). All generated code has been reviewed and is maintained by the author.
+
+## Provenance & trademarks
+
+This software is an independent, clean-room implementation of the publicly
+documented MATLAB® C Matrix API — it contains no MathWorks headers, source, or
+binaries. MATLAB and MEX are trademarks of The MathWorks, Inc.; this project is
+not affiliated with, sponsored by, or endorsed by The MathWorks, Inc. See
+[NOTICE](NOTICE) for details.
