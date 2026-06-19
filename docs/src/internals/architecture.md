@@ -14,6 +14,30 @@ linker resolves them at MEX load time.
 - **No headers required**: function signatures are declared directly in Julia
   via `ccall`, bypassing the need for `mex.h` or `matrix.h`.
 
+## Shared core: LibMx
+
+The mxArray FFI and marshaling layer is not Mexicah-specific — it is factored into a
+standalone package, [**LibMx**](https://github.com/el-oso/LibMx.jl):
+
+- the MATLAB C Matrix-API `ccall` wrappers (`mxGetPr`, `mxCreateDoubleMatrix`, …),
+- the per-Julia-type **marshalers** that convert Julia values ↔ `mxArray` (`load_arg`,
+  `store_result`, and one `*Marshaler` per supported type), and
+- the `MxArray` type, class-id constants, and TypeContracts interfaces.
+
+Mexicah re-exports these (the generated MEX source calls `Mexicah.load_arg` /
+`Mexicah.store_result`, which resolve into LibMx), and everything in LibMx is kept
+`--trim=safe` compatible because Mexicah compiles it into the MEX.
+
+LibMx has a second consumer: [**Unmex**](https://github.com/el-oso/Unmex.jl), which does
+the *inverse* — it `dlopen`s an existing `.mex*` and **calls** it from Julia (Julia as the
+caller, the MEX as the callee), reusing LibMx's marshalers to convert arguments and
+results. Both directions share one FFI core.
+
+LibMx also owns the **host `libmx`/`libmex` C source** (`cruntime/libmxhost.c`): a
+from-scratch implementation of the `mx*`/`mex*` API used as a MATLAB-free test double by
+Mexicah's and LibMx's marshaler tests, and as the runtime host a loaded MEX resolves its
+symbols against in Unmex. One source of truth, built via `LibMx.build_libmxhost`.
+
 ## Build pipeline
 
 ![Mexicah build pipeline: an @mexfunction signature is recorded, then build_mex validates, generates a self-contained Julia source, formats it, compiles it with juliac --trim=safe --bundle, renames the library to a .mexa64, and writes a setup.m — producing a mex/ directory MATLAB loads with no Julia present.](../assets/build-pipeline.svg)

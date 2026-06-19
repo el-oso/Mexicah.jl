@@ -120,3 +120,12 @@ including sparse matrices — in real MATLAB.
 
 A GPU extension (NVIDIA, via KernelAbstractions → PTX) is available but
 **experimental** and requires a GPU to build, so it is not part of the verified set.
+
+## Related packages
+
+- [**LibMx.jl**](https://github.com/el-oso/LibMx.jl) — the shared mxArray FFI +
+  marshaling core (the `ccall` wrappers and per-type converters) that Mexicah is built
+  on. See [Architecture](internals/architecture.md).
+- [**Unmex.jl**](https://github.com/el-oso/Unmex.jl) — the **inverse** of Mexicah: instead
+  of compiling Julia → MEX, it loads an existing `.mex*` and **calls** it from Julia (no
+  MATLAB), reusing the same LibMx core.
