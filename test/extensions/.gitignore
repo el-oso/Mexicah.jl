@@ -1,0 +1,2 @@
+# Resolve fresh in CI so this guard catches breakage against current package versions.
+Manifest.toml

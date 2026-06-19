@@ -1,0 +1,35 @@
+name: Extensions
+
+# Loads and exercises every Mexicah package extension (DataFrames, Enzyme,
+# ForwardDiff, JuMP, MTK) against the real heavy packages. The main CI installs no
+# weakdep packages, so it never precompiles these extensions — a whole class of
+# load/runtime bugs (anon-fn return-type lowering, wrong weakdep UUID, JuMP.Min,
+# MTK tuple/RGF-init) went unnoticed until now. This job guards against regressions.
+# Linux-only and not in the matrix: the extensions are platform-independent here and
+# the heavy precompile (Enzyme + MTK) is slow.
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: extensions-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  extensions:
+    name: Extension load + run (Julia 1.12, Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12'
+      - uses: julia-actions/cache@v2
+      - name: Instantiate the heavy extension environment
+        run: julia --project=test/extensions -e 'using Pkg; Pkg.instantiate()'
+      - name: Run extension checks
+        run: julia --project=test/extensions test/extensions/check.jl

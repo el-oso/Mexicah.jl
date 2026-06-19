@@ -1,0 +1,17 @@
+# Separate, heavy environment for exercising Mexicah's package extensions. Kept out
+# of the lean test/Project.toml so the normal test suite stays fast and MATLAB-free.
+# The Extensions CI job instantiates this and runs check.jl. These extensions are
+# never loaded by the main CI, which is how a batch of load/runtime bugs went
+# unnoticed (see ext/ fixes). This guards against regressions of that class.
+[deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+HiGHS = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
+JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
+Mexicah = "28b42ba6-5630-446f-bcf8-82236b20fd10"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+Mexicah = {path = "../.."}
