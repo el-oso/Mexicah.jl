@@ -23,13 +23,8 @@ makedocs(;
             "examples/scalar.md",
             "examples/matrix.md",
             "examples/sparse.md",
-            "examples/ad_enzyme.md",
-            "examples/mtk_ode.md",
             "examples/handles.md",
-            "examples/dataframes.md",
-            "examples/jump.md",
             "examples/linalg.md",
-            "examples/cuda.md",
         ],
         "Reference" => [
             "reference/api.md",

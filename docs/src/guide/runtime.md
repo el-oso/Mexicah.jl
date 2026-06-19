@@ -94,5 +94,5 @@ right below the logo. It is emitted through MATLAB's `mexPrintf` with a literal
 
 Both the logo and the message are emitted line-by-line from constant strings, so
 the whole path stays `juliac --trim=safe` (no allocation, no dynamic dispatch).
-GPU MEX files built with [`@mexgpukernel`](../examples/cuda.md) print the logo
-too (with no message).
+GPU MEX files built with the experimental `@mexgpukernel` print the logo too
+(with no message).

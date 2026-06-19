@@ -67,10 +67,11 @@ End users need only MATLAB — no Julia, no compiler.
   needs only MATLAB.
 - **Zero-copy inputs** — array arguments are wrapped directly over MATLAB's
   buffers; one `memcpy` for outputs.
-- **GPU kernels** — compile a KernelAbstractions `@kernel` to PTX and ship a MEX
-  that drives the NVIDIA driver directly, with no CUDA.jl at runtime.
-- **Extensible** — Enzyme/ForwardDiff gradients, ModelingToolkit, DataFrames,
-  JuMP, and a LinearAlgebra bridge via package extensions.
+- **LinearAlgebra bridge** — trim-safe SVD, solve, det/inv, and LU/Cholesky.
+- **Experimental extensions** — DataFrames, Enzyme/ForwardDiff gradients, JuMP,
+  ModelingToolkit, and CUDA GPU kernels via package extensions. These pull in
+  large, dynamic frameworks and **do not compile under `--trim=safe`** (build them
+  with `trim=false`); they are not covered by the trim-built example set.
 
 ## Documentation
 

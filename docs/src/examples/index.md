@@ -25,29 +25,18 @@ julia --project=examples -e 'using Pkg; Pkg.instantiate()'   # once
 julia --project=examples examples/scalar_add.jl
 ```
 
-## GPU example
+## Experimental extensions
 
-| Example | What it demonstrates |
-|---|---|
-| [GPU kernels (CUDA)](cuda.md) | KernelAbstractions `@kernel` → PTX → driver-only MEX |
+Mexicah ships package extensions for **DataFrames**, **Enzyme**, **ForwardDiff**,
+**JuMP**, **ModelingToolkit**, and **CUDA**. They are **experimental**: each pulls
+in a large framework whose runtime is fundamentally dynamic, so a MEX that uses one
+**does not compile under `--trim=safe`** (verified — Enzyme's `autodiff`, JuMP's MOI
+layer, DataFrames' internals, and MTK/DiffEq's solvers all emit unresolved dynamic
+calls). The same applies to `DifferentialEquations.jl`. There are deliberately **no
+example pages** for them, because every example here is one that actually compiles
+and runs.
 
-The GPU example embeds PTX and has its own environment (CUDA is kept out of the
-lean project so CPU builds don't bundle ~800 MiB of CUDA artifacts):
-
-```bash
-julia --project=examples/gpu -e 'using Pkg; Pkg.instantiate()'   # once
-julia --project=examples/gpu examples/cuda_vector_add.jl         # needs an NVIDIA GPU
-```
-
-## Illustrative framework examples
-
-These show how the package extensions are used, but depend on large frameworks
-that may not compile under `--trim=safe`; they require the framework in your
-environment and are not part of the CI-built set.
-
-| Example | What it demonstrates |
-|---|---|
-| [Enzyme gradient](ad_enzyme.md) | Reverse-mode AD via `@mexgradient` |
-| [ModelingToolkit ODE](mtk_ode.md) | Spring-mass system RHS + Jacobian MEX |
-| [DataFrames](dataframes.md) | Handle-based DataFrame lifecycle and value-copy struct conversion |
-| [JuMP optimization](jump.md) | Stateless LP/QP solvers and handle-based model lifecycle |
+If you need one of these frameworks, load it in your environment and build with
+`trim=false` — you get a large, working (un-trimmed) MEX. For an ODE, the trim-safe
+route is to write the right-hand side and a fixed-step integrator as plain Julia
+(no framework), which compiles cleanly like the examples above.

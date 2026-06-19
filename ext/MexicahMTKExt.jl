@@ -11,6 +11,10 @@ MTK.RuntimeGeneratedFunctions.init(@__MODULE__)
 """
     build_mex_from_mtk(sys; output="./mex/", trim=true, bundle=true)
 
+**Experimental.** ModelingToolkit is a large, dynamic framework: the generated MEX
+does **not** compile under `juliac --trim=safe` (build with `trim=false`). The flat
+`p::Vector` parameter interface also needs a port to current MTK's `MTKParameters`.
+
 Given a simplified `ODESystem`, generate and compile MEX files for:
 - `<sysname>_rhs`  — the ODE right-hand side  `f(u, p, t) -> du`
 - `<sysname>_jac`  — the Jacobian             `J(u, p, t) -> Matrix{Float64}`

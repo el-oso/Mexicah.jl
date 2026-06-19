@@ -27,9 +27,9 @@ features:
   - title: Zero-copy arrays
     icon: ⚡
     details: "Array inputs are read straight from MATLAB's buffers — no copy in, one copy out."
-  - title: Batteries included
+  - title: LinearAlgebra built in
     icon: 🧩
-    details: "Enzyme/ForwardDiff gradients, ModelingToolkit ODEs, DataFrames, JuMP, LinearAlgebra, and CUDA GPU kernels."
+    details: "A trim-safe LinearAlgebra bridge (SVD, solve, det/inv, LU/Cholesky). DataFrames/Enzyme/JuMP/MTK/CUDA are available as experimental extensions."
 ---
 ```
 
@@ -105,7 +105,7 @@ the same MATLAB session. See [How it runs](guide/runtime.md) for the details.
 
 - [Installation](guide/installation.md) — one-time setup (Julia, `juliac`, a C compiler).
 - [Quickstart](guide/quickstart.md) — function → MEX → MATLAB in five steps.
-- [Examples](examples/index.md) — scalars, matrices, sparse, AD gradients, ODEs, GPU.
+- [Examples](examples/index.md) — scalars, matrices, sparse, LinearAlgebra, and opaque handles.
 
 ## Platform support
 
@@ -118,5 +118,5 @@ the same MATLAB session. See [How it runs](guide/runtime.md) for the details.
 All three are exercised end-to-end in CI: every build loads and runs its MEX —
 including sparse matrices — in real MATLAB.
 
-GPU kernels (NVIDIA, via KernelAbstractions) compile to PTX and run with only the
-NVIDIA driver — see the [GPU example](examples/cuda.md).
+A GPU extension (NVIDIA, via KernelAbstractions → PTX) is available but
+**experimental** and requires a GPU to build, so it is not part of the verified set.

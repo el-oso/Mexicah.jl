@@ -11,10 +11,10 @@ input_types, output_types)` (`LINALG`, `HANDLES`) so their driver scripts don't
 restate the type signatures; the single-function scalar/matrix/sparse examples
 pass an explicit tuple to mirror the quickstart.
 
-Only trim-compilable, framework-free examples live here. The Enzyme / JuMP /
-ModelingToolkit / DataFrames examples require heavy frameworks that do not
-`--trim=safe` compile, and the GPU example embeds PTX and needs no module import;
-those keep their own standalone scripts.
+Only trim-compilable, framework-free examples live here. The DataFrames / Enzyme /
+ForwardDiff / JuMP / ModelingToolkit / CUDA package extensions are **experimental**
+and do not `--trim=safe` compile (verified), so they have no example here — build
+them in your own environment with `trim=false`.
 """
 module MexicahExamples
 

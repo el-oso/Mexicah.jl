@@ -93,7 +93,7 @@ end
 
 # ── GPU integration (requires NVIDIA GPU + CUDA.jl + KernelAbstractions) ───────
 # Self-guards like the JuMP/DataFrames tests: skips cleanly when the GPU stack is
-# absent. The full MATLAB round-trip is validated manually via examples/cuda_vector_add.jl.
+# absent. The GPU MEX path (experimental) requires an NVIDIA GPU to build and run.
 
 @testitem "CUDA build path: PTX extraction from a KA kernel" tags = [:cuda] begin
     using Mexicah, Test

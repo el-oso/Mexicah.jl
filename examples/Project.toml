@@ -11,10 +11,9 @@ version = "0.1.0"
 # Build any example with this project active:
 #   julia --project=examples examples/scalar_add.jl
 #
-# Kept lean on purpose: CUDA/KernelAbstractions are NOT here, so a CPU example
-# bundles only the Julia runtime (juliac bundles every artifact in the active
-# project — including CUDA would add ~800 MiB to a scalar-add MEX). The GPU
-# example has its own environment in examples/gpu/.
+# Kept lean on purpose: only trim-safe, framework-free examples build from here, so
+# a CPU example bundles only the Julia runtime. The experimental extensions
+# (DataFrames/Enzyme/JuMP/MTK/CUDA) do not --trim=safe compile and have no example.
 [deps]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Mexicah = "28b42ba6-5630-446f-bcf8-82236b20fd10"

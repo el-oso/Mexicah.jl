@@ -39,6 +39,10 @@ end
 Generate and compile a gradient MEX for the scalar-valued function `f`.
 Requires Enzyme.jl (loaded as a weak dependency). With `backend=:forwarddiff`
 ForwardDiff.jl is used instead.
+
+!!! warning "Experimental"
+    Enzyme/ForwardDiff are heavy, dynamic frameworks: the generated gradient MEX
+    does **not** compile under `juliac --trim=safe`. Build with `trim=false`.
 """
 macro mexgradient(args...)
     fname, kws = _parse_gradient_args(args)
@@ -80,6 +84,10 @@ end
 
 Compile a KernelAbstractions `@kernel` `k` into a GPU MEX named `name`. Requires
 CUDA.jl and KernelAbstractions.jl to be loaded (they trigger `MexicahCUDAExt`).
+
+!!! warning "Experimental"
+    The GPU extension requires an NVIDIA GPU to build and is not part of the
+    CI-verified example set.
 
 The trailing `function` gives only the MATLAB-visible signature — its body is
 ignored. The kernel itself must take `(output, inputs...)` in the same order, all
