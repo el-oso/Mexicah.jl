@@ -1,6 +1,7 @@
 # Test environment — run with: julia --project=test test/runtests.jl
 [deps]
 JET           = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+LibMx         = "2f4a764b-710e-4b99-a834-8162471695bc"
 Libdl         = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Mexicah       = "28b42ba6-5630-446f-bcf8-82236b20fd10"
@@ -10,6 +11,7 @@ Test          = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TypeContracts = "c7a3f1e2-84b5-4d69-9e0a-1f2b3c4d5e6f"
 
 [sources]
+LibMx = {url = "https://github.com/el-oso/LibMx.jl", rev = "master"}
 Mexicah = {path = ".."}
 
 [compat]

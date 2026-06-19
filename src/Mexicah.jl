@@ -1,12 +1,15 @@
 module Mexicah
 
-using SparseArrays: SparseMatrixCSC, nnz
+using SparseArrays: SparseMatrixCSC
 using TypeContracts: explain_trim_failure, TrimFailure
 
-include("types.jl")
-include("api.jl")
-include("marshaling.jl")
-include("contracts.jl")
+# The mxArray FFI + marshaling core now lives in LibMx (shared with Unmex). `using
+# LibMx` brings its full surface into Mexicah's namespace so generated MEX code and
+# extensions resolve `Mexicah.MxArray`, `Mexicah.load_arg`, `Mexicah.mx_*`, etc.
+# `_mex_report_error` is the one non-exported name the generated wrappers reference.
+using LibMx
+using LibMx: _mex_report_error
+
 include("runtime.jl")
 include("handles.jl")
 include("codegen.jl")
