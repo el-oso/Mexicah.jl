@@ -27,9 +27,6 @@ jobs:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
-      - name: Build libmx stub (Linux — enables :matlab tests without MATLAB)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: cc -O2 -shared -fPIC -o test/matlab/libmx_stub/libmx_stub.so
-             test/matlab/libmx_stub/libmx_stub.c
+      # test/runtests.jl builds + preloads the libmx host from LibMx's canonical source
+      # (LibMx.build_libmxhost), so no separate stub-build step is needed.
       - uses: julia-actions/julia-runtest@v1

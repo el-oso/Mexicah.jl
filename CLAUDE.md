@@ -23,21 +23,15 @@ julia -m Mexicah help
 # or install the launcher: julia -e 'using Pkg; Pkg.Apps.develop(path=".")'
 ```
 
-### libmx stub (MATLAB-less :matlab tests on Linux)
+### libmx host (MATLAB-less :matlab tests on Linux)
 
-Build before running tests locally when MATLAB is not installed:
-
-```bash
-cc -O2 -shared -fPIC -o test/matlab/libmx_stub/libmx_stub.so \
-   test/matlab/libmx_stub/libmx_stub.c
-```
-
-Or use the helper: `julia test/matlab/libmx_stub/build.jl`
-
-`test/runtests.jl` preloads the stub with `RTLD_GLOBAL` on Linux if the `.so`
-exists, making `cglobal(:mxGetScalar)` succeed and enabling all `:matlab`-tagged
-tests. The `.so` is gitignored. CI builds it automatically (Linux only; macOS and
-Windows use real MATLAB via `MATLAB.yml`).
+The libmx host C source now lives in **LibMx** (`LibMx/cruntime/libmxhost.c`) — one
+canonical source shared by Mexicah's tests, LibMx's tests, and Unmex's runtime.
+`test/runtests.jl` builds it on Linux via `LibMx.build_libmxhost(...)` and preloads the
+`.so` with `RTLD_GLOBAL`, making `cglobal(:mxGetScalar)` succeed and enabling all
+`:matlab`-tagged tests. No separate build step is needed (the built `.so` is gitignored).
+The real-MATLAB CI (`MATLAB.yml`) runs `build_fixtures.jl`, not `runtests.jl`, so the host
+never shadows real MATLAB there.
 
 ## Architecture
 
@@ -175,7 +169,7 @@ A "1-D" MATLAB string array is really `1×N`, so it round-trips as a `1×N Matri
 If this split becomes awkward, switch to a wrapper type (Option A) — the bridge is
 reused, only the dispatch type changes.
 
-### libmx stub (`test/matlab/libmx_stub/libmx_stub.c`)
+### libmx host (`LibMx/cruntime/libmxhost.c`, built via `LibMx.build_libmxhost`)
 
 ~470-line C file. Key struct:
 
