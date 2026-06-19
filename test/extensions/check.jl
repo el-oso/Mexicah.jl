@@ -76,18 +76,23 @@ let
     check("ForwardDiff ∇(Σxᵢ²) == 2x", () -> ForwardDiff.gradient(f, [1.0, 2.0, 3.0]) == [2.0, 4.0, 6.0])
 end
 
-println("\n== ModelingToolkit: generation via eval_module=ext (guards RGF-init + tuple) ==")
+println("\n== ModelingToolkit: _mtk_wrappers numeric correctness (MTKParameters port) ==")
 let ext = getext(:MexicahMTKExt)
     @variables t x(t) v(t)
     @parameters k m
     @named spring_mass = ODESystem([D(x) ~ v, D(v) ~ -(k / m) * x], t, [x, v], [k, m])
     sys = structural_simplify(spring_mass)
-    rhs = MTK.generate_rhs(sys; expression = Val{false}, eval_module = ext)
-    rhs_oop = rhs isa Tuple ? rhs[1] : rhs
-    # NOTE: only checks generation + that the RGF is callable. Numeric correctness
-    # against a flat p::Vector is a KNOWN-BROKEN issue (current MTK wants structured
-    # MTKParameters); the ext needs a port before that can be asserted here.
-    check("generate_rhs RGF is callable", () -> rhs_oop([1.0, 0.0], [[1.0], [0.5]], 0.0) isa AbstractVector)
+    rhs, jac = ext._mtk_wrappers(sys)
+    # `u` is in unknowns(sys) order, `p` in parameters(sys) order (both reordered by
+    # structural_simplify). Map physical x=2, v=3, k=4, m=1 into those orders and check
+    # du = [D(v)=-(k/m)x=-8, D(x)=v=3] — a flat-p straight-through (the old bug) gives wrong numbers.
+    us = MTK.unknowns(sys)
+    isv(s) = startswith(string(s), "v")
+    uvec = Float64[isv(s) ? 3.0 : 2.0 for s in us]
+    pvec = Float64[4.0, 1.0]                      # parameters(sys) == [k, m]
+    expect = Float64[isv(s) ? -(4.0 / 1.0) * 2.0 : 3.0 for s in us]
+    check("rhs(u,p,t) is numerically correct", () -> isapprox(rhs(uvec, pvec, 0.0), expect; atol = 1e-9))
+    check("jac(u,p,t) returns a 2×2 Matrix", () -> size(jac(uvec, pvec, 0.0)) == (2, 2))
 end
 
 println()
