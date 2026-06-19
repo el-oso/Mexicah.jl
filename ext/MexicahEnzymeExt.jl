@@ -18,8 +18,11 @@ function _enzyme_gradient_mex(f, grad_name::Symbol, output::String)
     input_t === nothing &&
         error("@mexgradient: $f must accept a single Vector{Float64} argument")
 
-    # Build a wrapper function that calls Enzyme and returns the gradient.
-    grad_f = function (x::Vector{Float64},)::Vector{Float64}
+    # Build a wrapper function that calls Enzyme and returns the gradient. A *named*
+    # local function (not an anonymous `function (x)::R`) — a return-type annotation
+    # on an anonymous function fails to lower on Julia 1.12 ("invalid assignment
+    # location"); named functions accept `::R` fine.
+    function grad_f(x::Vector{Float64})::Vector{Float64}
         dx = zero(x)
         Enzyme.autodiff(Enzyme.Reverse, f, Enzyme.Active, Enzyme.Duplicated(x, dx))
         return dx

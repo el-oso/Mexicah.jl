@@ -21,7 +21,9 @@ function _forwarddiff_gradient_mex(f, grad_name::Symbol, output::String)
     input_t === nothing &&
         error("@mexgradient: $f must accept a single Vector{Float64} argument")
 
-    grad_f = function (x::Vector{Float64},)::Vector{Float64}
+    # Named local function (not anonymous): a return-type annotation on an anonymous
+    # function fails to lower on Julia 1.12; named functions accept `::R` fine.
+    function grad_f(x::Vector{Float64})::Vector{Float64}
         return ForwardDiff.gradient(f, x)
     end
 

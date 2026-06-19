@@ -97,7 +97,7 @@ function build_lp(
     model = Model(optimizer_type)
     JuMP.set_silent(model)
     @variable(model, lb[i] <= x[i = 1:n] <= ub[i])
-    @objective(model, JuMP.Min, sum(c[i] * x[i] for i in 1:n))
+    @objective(model, JuMP.MIN_SENSE, sum(c[i] * x[i] for i in 1:n))
     nub = size(A_ub, 1)
     nub > 0 && @constraint(model, A_ub * x .<= b_ub)
     return model
@@ -158,7 +158,7 @@ function build_qp(
     @variable(model, lb[i] <= x[i = 1:n] <= ub[i])
     @objective(
         model,
-        JuMP.Min,
+        JuMP.MIN_SENSE,
         0.5 * sum(Q[i, j] * x[i] * x[j] for i in 1:n, j in 1:n) +
             sum(c[i] * x[i] for i in 1:n)
     )
