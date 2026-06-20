@@ -53,3 +53,28 @@ generated functions use `RuntimeGeneratedFunction`s and pull MTK into the runtim
 result is `trim=false`. Producing a fully juliac-compiled MEX additionally needs the
 generated closures emitted into an importable on-disk package (they currently live in the
 extension module, which juliac cannot `import`) — a known limitation.
+
+### Enzyme / ForwardDiff gradients (`trim=false` recipe)
+
+`@mexgradient` compiles the gradient of a scalar loss `f(x::Vector{Float64})::Float64`
+into a MEX `[g] = f_grad(x)`. Enzyme is not trim-safe, so pass `trim=false`:
+
+```julia
+module Grad
+using Mexicah, Enzyme          # loading Enzyme activates the backend
+
+loss(x) = sum(abs2, x)         # scalar-valued, one Vector{Float64} argument
+
+@mexgradient loss backend=:enzyme trim=false
+end
+```
+
+```matlab
+run('mex/mexicah_setup.m')
+loss_grad([1 2 3])             % → [2 4 6]
+```
+
+`trim=false` yields a large but working (un-trimmed) MEX that bundles Enzyme's AD
+runtime. `backend=:forwarddiff` can build trim-safe for small inputs (omit `trim`). This
+is the general pattern for any experimental extension: load the framework and pass
+`trim=false`.

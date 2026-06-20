@@ -13,7 +13,7 @@ The generated MEX has signature:
   [g] = f_grad(x)
 where `x` is a column vector and `g` is its gradient.
 """
-function _enzyme_gradient_mex(f, grad_name::Symbol, output::String)
+function _enzyme_gradient_mex(f, grad_name::Symbol, output::String, trim::Bool = false)
     input_t = Mexicah._infer_vector_input(f)
     input_t === nothing &&
         error("@mexgradient: $f must accept a single Vector{Float64} argument")
@@ -34,6 +34,7 @@ function _enzyme_gradient_mex(f, grad_name::Symbol, output::String)
         output_types = Type[Vector{Float64}],
         name = grad_name,
         output = output,
+        trim = trim,
     )
 end
 

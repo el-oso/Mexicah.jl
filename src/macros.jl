@@ -34,21 +34,25 @@ end
 # ── @mexgradient ──────────────────────────────────────────────────────────────
 
 """
-    @mexgradient f [backend=:enzyme] [output="./mex/"] [name=:f_grad]
+    @mexgradient f [backend=:enzyme] [output="./mex/"] [name=:f_grad] [trim=true]
 
 Generate and compile a gradient MEX for the scalar-valued function `f`.
 Requires Enzyme.jl (loaded as a weak dependency). With `backend=:forwarddiff`
 ForwardDiff.jl is used instead.
 
 !!! warning "Experimental"
-    Enzyme/ForwardDiff are heavy, dynamic frameworks: the generated gradient MEX
-    does **not** compile under `juliac --trim=safe`. Build with `trim=false`.
+    Enzyme is a heavy, dynamic framework: an Enzyme gradient MEX does **not** compile
+    under `juliac --trim=safe`, so pass `trim=false` for `backend=:enzyme`
+    (e.g. `@mexgradient myloss trim=false`). ForwardDiff can build trim-safe.
 """
 macro mexgradient(args...)
     fname, kws = _parse_gradient_args(args)
     backend = get(kws, :backend, :enzyme)
     output = get(kws, :output, "./mex/")
     grad_name = get(kws, :name, Symbol(fname, :_grad))
+    # Enzyme is not --trim=safe compatible, so an Enzyme gradient MEX must be built with
+    # `trim=false`; ForwardDiff can trim. Default true; override with `trim=false`.
+    trim = get(kws, :trim, true)
 
     return quote
         Mexicah._build_gradient_mex(
@@ -56,22 +60,25 @@ macro mexgradient(args...)
             $(QuoteNode(grad_name)),
             $(QuoteNode(backend)),
             $output,
+            $trim,
         )
     end
 end
 
 # Called at runtime; the actual implementation lives in MexicahEnzymeExt.
-function _build_gradient_mex(f, grad_name::Symbol, backend::Symbol, output::String)
+function _build_gradient_mex(
+        f, grad_name::Symbol, backend::Symbol, output::String, trim::Bool = true,
+    )
     return if backend === :enzyme
         ext = Base.get_extension(@__MODULE__, :MexicahEnzymeExt)
         ext === nothing &&
             error("Enzyme.jl must be loaded before using @mexgradient with backend=:enzyme")
-        ext._enzyme_gradient_mex(f, grad_name, output)
+        ext._enzyme_gradient_mex(f, grad_name, output, trim)
     elseif backend === :forwarddiff
         ext = Base.get_extension(@__MODULE__, :MexicahForwardDiffExt)
         ext === nothing &&
             error("ForwardDiff.jl must be loaded before using @mexgradient with backend=:forwarddiff")
-        ext._forwarddiff_gradient_mex(f, grad_name, output)
+        ext._forwarddiff_gradient_mex(f, grad_name, output, trim)
     else
         error("Unknown @mexgradient backend: $backend. Use :enzyme or :forwarddiff.")
     end

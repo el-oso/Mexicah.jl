@@ -16,7 +16,7 @@ where `x` is a column vector and `g` is its gradient.
 ForwardDiff is recommended for functions with a small number of inputs (fewer
 than ~10). For larger inputs, use the Enzyme reverse-mode backend instead.
 """
-function _forwarddiff_gradient_mex(f, grad_name::Symbol, output::String)
+function _forwarddiff_gradient_mex(f, grad_name::Symbol, output::String, trim::Bool = true)
     input_t = Mexicah._infer_vector_input(f)
     input_t === nothing &&
         error("@mexgradient: $f must accept a single Vector{Float64} argument")
@@ -33,6 +33,7 @@ function _forwarddiff_gradient_mex(f, grad_name::Symbol, output::String)
         output_types = Type[Vector{Float64}],
         name = grad_name,
         output = output,
+        trim = trim,
     )
 end
 
