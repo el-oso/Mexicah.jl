@@ -1,6 +1,7 @@
 # Mexicah.jl
 
 [![CI](https://github.com/el-oso/Mexicah.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/el-oso/Mexicah.jl/actions/workflows/CI.yml)
+[![Coverage](https://coveralls.io/repos/github/el-oso/Mexicah.jl/badge.svg?branch=master)](https://coveralls.io/github/el-oso/Mexicah.jl?branch=master)
 [![MATLAB](https://github.com/el-oso/Mexicah.jl/actions/workflows/MATLAB.yml/badge.svg)](https://github.com/el-oso/Mexicah.jl/actions/workflows/MATLAB.yml)
 [![Docs](https://github.com/el-oso/Mexicah.jl/actions/workflows/Documentation.yml/badge.svg)](https://el-oso.github.io/Mexicah.jl/dev/)
 [![Julia 1.12](https://img.shields.io/badge/Julia-1.12-9558B2?logo=julia)](https://julialang.org)
